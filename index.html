@@ -229,7 +229,7 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
-<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Версия 3.3</b> · обновлена <time datetime="2026-11-13T11:04:43+02:00">13.11.2026 в 11:04</time> <span class="mut">(время Израиля)</span></p><p class="mut" id="prev">Предыдущая версия: 3.2 · <time datetime="2026-11-13T10:55:55+02:00">13.11.2026 в 10:55</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru" aria-current="page">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Версия 3.4</b> · обновлена <time datetime="2026-11-13T11:49:05+02:00">13.11.2026 в 11:49</time> <span class="mut">(время Израиля)</span></p><p class="mut" id="prev">Предыдущая версия: 3.3 · <time datetime="2026-11-13T11:04:43+02:00">13.11.2026 в 11:04</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru" aria-current="page">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>НейроСад</h1><p class="mut small">Маленькие шаги. Каждый день.</p></div>
@@ -337,7 +337,7 @@ function cleanState(o){
   ['lastVisit','lastDay','water'].forEach(k=>st[k]=typeof o[k]==='string'?o[k].slice(0,10):'');
   st.dev=o.dev==='phone'||o.dev==='desk'?o.dev:'';
   const ent=h=>h&&typeof h==='object'&&typeof h.g==='string'&&typeof h.at==='number'&&isFinite(h.at)
-    ?{g:h.g.slice(0,20),l:int(h.l,0,4),at:h.at,d:int(h.d,0,86400),s:typeof h.s==='number'&&isFinite(h.s)?int(Math.round(h.s),0,100):null,ok:h.ok===true&&typeof h.s==='number'}:null;
+    ?{g:h.g.slice(0,20),l:int(h.l,0,4),at:h.at,d:int(h.d,0,86400),s:typeof h.s==='number'&&isFinite(h.s)?int(Math.round(h.s),0,100):null,ok:h.ok===true&&typeof h.s==='number',...(h.q===1&&!(typeof h.s==='number'&&isFinite(h.s))?{q:1}:{})}:null;
   st.hist=(Array.isArray(o.hist)?o.hist:[]).map(ent).filter(Boolean).slice(-150);
   const c=o.cur;st.cur=c&&typeof c==='object'&&typeof c.g==='string'&&typeof c.at==='number'&&isFinite(c.at)?{g:c.g.slice(0,20),l:int(c.l,0,4),at:c.at,sid:typeof c.sid==='string'?c.sid.slice(0,24):''}:null;
   if(o.lv&&typeof o.lv==='object')Object.keys(o.lv).slice(0,60).forEach(k=>{if(typeof o.lv[k]==='number'&&k!=='__proto__')st.lv[k.slice(0,20)]=int(o.lv[k],0,4)});
@@ -351,16 +351,22 @@ const cleanTree=(t,id,u)=>{t=t&&typeof t==='object'?t:{};return{id:String(id),ui
    always replaces a "not finished" one, whichever side it came from. */
 function mergeState(loc,remRaw){
   const rem=cleanState(remRaw),m=cleanState(loc),key=h=>h.at+'|'+h.g,R=new Map(rem.hist.map(h=>[key(h),h])),out=new Map(R);
-  let dApples=0,dSec=0;
+  let dApples=0,dSec=0,fixLoc=0,fixRem=0;
   m.hist.forEach(h=>{
     const k=key(h),r=R.get(k);
-    if(!r||(r.s==null&&h.s!=null)){out.set(k,h);if(h.ok)dApples++;if(h.s!=null)dSec+=h.d}
+    if(!r||(r.s==null&&h.s!=null)){out.set(k,h);if(h.ok)dApples++;if(h.s!=null)dSec+=h.d;if(r&&r.q===1)fixRem++}
+    else if(h.s==null&&h.q===1&&r.s!=null)fixLoc++;
   });
+  /* The lifetime "abandoned" counter: a record marked q was counted on the side that holds it. When the same round
+     turns out to be finished, that side's count is lowered by one before the two sides are compared. Nothing is
+     recomputed from the history (it keeps only the last 150 rounds), so older totals are never lost. */
+  const quitLoc=Math.max(0,(m.tot.quit||0)-fixLoc),quitRem=Math.max(0,(rem.tot.quit||0)-fixRem),hadQuit='quit' in m.tot||'quit' in rem.tot;
   m.hist=[...out.values()].sort((a,b)=>a.at-b.at).slice(-150);
   m.apples=rem.apples+dApples;m.sec=rem.sec+dSec;
   ['flowers','days','waters','seen'].forEach(k=>m[k]=Math.max(m[k],rem[k]));
   Object.keys(rem.lv).forEach(k=>m.lv[k]=Math.max(m.lv[k]==null?0:m.lv[k],rem.lv[k]));
   Object.keys(rem.tot).forEach(k=>m.tot[k]=Math.max(m.tot[k]||0,rem.tot[k]));
+  if(hadQuit)m.tot.quit=Math.max(quitLoc,quitRem);
   m.born=rem.born||m.born;m.visits=[...new Set([...rem.visits,...m.visits])].sort((a,b)=>a-b).slice(-60);
   /* "playing now": keep this tab's round, else another tab's; drop it once that round is in the history */
   m.cur=m.cur||(rem.cur&&rem.cur.sid!==SID?rem.cur:null);
@@ -486,7 +492,7 @@ const myTreeId=()=>sbOK?MY[ACC.active]:uid+'~'+ACC.active;
 const pres=()=>{if(room)room.presence({acc:mode==='account'&&S.nick?1:null,pid:ACC.active||null}).catch(()=>{})};
 function housekeeping(){
   if(!S.tot||typeof S.tot!=='object')S.tot={};
-  if(S.cur&&(S.cur.sid===SID||Date.now()-S.cur.at>STALE_ROUND)){S.hist.push({g:S.cur.g,l:S.cur.l,at:S.cur.at,d:0,s:null,ok:false});S.cur=null;bump('quit')}
+  if(S.cur&&(S.cur.sid===SID||Date.now()-S.cur.at>STALE_ROUND)){S.hist.push({g:S.cur.g,l:S.cur.l,at:S.cur.at,d:0,s:null,ok:false,q:1});S.cur=null;bump('quit')}
   if(S.lastVisit!==DAY()){S.flowers++;S.lastVisit=DAY()}
   S.seen=Date.now();if(!Array.isArray(S.visits))S.visits=[];S.visits.push(S.seen);if(S.visits.length>60)S.visits=S.visits.slice(-60);
   S.dev=Math.min(screen.width||9999,innerWidth||9999)<700?'phone':'desk';
@@ -1186,7 +1192,7 @@ function finish(r){
 }
 function abandon(){
   if(G&&G.active){G.active=false;document.onkeydown=null;if(G.ctx&&G.ctx.stop)G.ctx.stop();
-    if(!G.trial){S.hist.push({g:G.g.id,l:G.lvl,at:G.t0,d:Math.round((Date.now()-G.t0)/1000),s:null,ok:false});if(S.hist.length>150)S.hist=S.hist.slice(-150);S.cur=null;bump('quit');save()}}
+    if(!G.trial){S.hist.push({g:G.g.id,l:G.lvl,at:G.t0,d:Math.round((Date.now()-G.t0)/1000),s:null,ok:false,q:1});if(S.hist.length>150)S.hist=S.hist.slice(-150);S.cur=null;bump('quit');save()}}
   G=null;
 }
 function vBreath(){

@@ -264,6 +264,79 @@ async def main():
             await o.evaluate("heartbeat()"); await o.wait_for_timeout(700)
             ok('10 the cheered player sees the cheer in the garden', await o.evaluate("cheer&&cheer.text") == 'QA cheer')
 
+            # 11. lifetime "abandoned" counter (tot.quit): a round wrongly counted as abandoned by another tab
+            #     and then finished must not stay counted; real abandons and old totals must be kept
+            COUNTS = "JSON.stringify([S.hist.filter(h=>h.s!=null).length,S.hist.filter(h=>h.s==null).length,(S.tot&&S.tot.quit)||0,S.apples])"
+
+            async def twin(c, src, f='en.html'):
+                """A second tab that carries the same tab id, as a duplicated browser tab does."""
+                sid = await src.evaluate("SID"); pg = await c.new_page(); pg.on('pageerror', lambda e: errs.append(str(e)))
+                await pg.add_init_script(f"try{{sessionStorage.setItem('ng_sid','{sid}')}}catch(e){{}}")
+                await pg.goto(SITE + f); await pg.wait_for_function("ready===true"); await pg.wait_for_timeout(500); return pg
+
+            unit = json.loads(await a.evaluate("""(()=>{
+              const R={},h=(at,s,q)=>Object.assign({g:'seq',l:0,at,d:5,s,ok:s!=null&&s>=60},q?{q:1}:{});
+              const st=(hist,tot,apples)=>Object.assign(blank(),{nick:'QA',hist,tot:tot||{},apples:apples||0});
+              const q=x=>x.tot.quit,fin=x=>x.hist.filter(e=>e.s!=null).length,un=x=>x.hist.filter(e=>e.s==null).length;
+              let m=mergeState(st([h(1,100)],{quit:3},1),st([h(1,null,1)],{quit:4}));R.remoteFalse=[q(m),fin(m),un(m),m.apples];
+              m=mergeState(st([h(1,null,1)],{quit:4}),st([h(1,100)],{quit:3},1));R.localFalse=[q(m),fin(m),un(m),m.apples];
+              m=mergeState(st([h(1,null,1)],{quit:4}),st([],{quit:3}));R.realLocal=[q(m),un(m)];
+              m=mergeState(st([],{quit:3}),st([h(1,null,1)],{quit:4}));R.realRemote=[q(m),un(m)];
+              const loc=st([h(1,100)],{quit:3},1),rem=st([h(1,null,1)],{quit:4});
+              const m1=mergeState(loc,rem),m2=mergeState(m1,rem),m3=mergeState(m2,m2),m4=mergeState(rem,m1),m5=mergeState(m4,rem);
+              R.repeat=[q(m1),q(m2),q(m3),q(m4),q(m5),m2.apples,m3.apples,m4.apples,m5.apples,fin(m5),un(m5)];
+              const many=[];for(let i=1;i<=170;i++)many.push(h(i,i%10===0?null:100,i%10===0));
+              const big=cleanState(st(many,{quit:40},153));
+              m=mergeState(big,st([h(170,100)],{quit:2},1));R.long=[big.hist.length,m.hist.length,q(m),un(m)];
+              m=mergeState(big,st([],{quit:2}));R.longNoFix=[m.hist.length,q(m),un(m)];
+              m=mergeState(st([h(1,100)],{quit:3},1),st([h(1,null)],{quit:4}));R.legacy=[q(m),un(m)];
+              m=mergeState(st([h(1,100)],{},1),st([h(1,null,1)],{quit:0}));R.floor=[q(m)];
+              m=mergeState(st([h(1,100)],{},1),st([h(2,100)],{},1));R.noKey=['quit' in m.tot];
+              m=mergeState(st([h(1,100),h(2,100),h(3,null,1)],{quit:5},2),st([h(1,null,1),h(2,null,1)],{quit:6}));R.mixed=[q(m),fin(m),un(m)];
+              R.flag=[cleanState(st([h(1,null,1)])).hist[0].q,'q' in cleanState(st([Object.assign(h(1,100),{q:1})])).hist[0]];
+              m=mergeState(st([h(1,100)],{quit:3,open:7,fin:2},1),st([h(1,null,1)],{quit:4,open:5,fin:9}));R.others=[m.tot.open,m.tot.fin,m.tot.quit];
+              return JSON.stringify(R)})()"""))
+            ok('11 merge: remote wrongly-counted abandon replaced by local finish lowers the counter by one', unit['remoteFalse'] == [3, 1, 0, 1], unit['remoteFalse'])
+            ok('11 merge: local wrongly-counted abandon replaced by remote finish lowers the counter by one', unit['localFalse'] == [3, 1, 0, 1], unit['localFalse'])
+            ok('11 merge: a real abandon (no finish for that round) stays counted, from either side', unit['realLocal'] == [4, 1] and unit['realRemote'] == [4, 1], [unit['realLocal'], unit['realRemote']])
+            ok('11 merge: repeating the merge any number of times and in either direction changes nothing more', unit['repeat'] == [3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 0], unit['repeat'])
+            ok('11 merge: history cut to 150 rounds, lifetime counter 40 is not recomputed from it (40 -> 39 for the one corrected round)', unit['long'] == [150, 150, 39, 14], unit['long'])
+            ok('11 merge: long history without a correction keeps the lifetime counter exactly', unit['longNoFix'] == [150, 40, 15], unit['longNoFix'])
+            ok('11 merge: older records without the marker are left alone (no guessing)', unit['legacy'] == [4, 0], unit['legacy'])
+            ok('11 merge: counter never goes below zero and is not invented where neither side had it', unit['floor'] == [0] and unit['noKey'] == [False], [unit['floor'], unit['noKey']])
+            ok('11 merge: two wrong counts and one real abandon in one merge', unit['mixed'] == [5, 2, 1], unit['mixed'])
+            ok('11 merge: the marker lives only on unfinished records; other counters are untouched', unit['flag'] == [1, False] and unit['others'] == [7, 9, 3], [unit['flag'], unit['others']])
+
+            for label, device in (('server', False), ('device', True)):
+                cq = await ctx(); q1 = await page(cq)
+                if device: await q1.evaluate("setMode('device').then(render)"); await q1.wait_for_timeout(300)
+                name = 'QA-Dup-' + label; await plant(q1, name)
+                await start(q1, 'schulte')
+                q2 = await twin(cq, q1)
+                mid = json.loads(await q2.evaluate(COUNTS))
+                ok(f'11 {label}: duplicated tab counts the running round as abandoned (the cause)', mid[1] == 1 and mid[2] == 1, mid)
+                await finish_schulte(q1); await reload(q1); await reload(q2)
+                ok(f'11 {label}: after the round is finished the wrong count is gone in both tabs', [json.loads(await x.evaluate(COUNTS)) for x in (q1, q2)] == [[1, 0, 0, 1], [1, 0, 0, 1]], [await x.evaluate(COUNTS) for x in (q1, q2)])
+                if not device:
+                    srv = [r['state'] for r in players() if r['state']['nick'] == name][0]
+                    ok('11 server: stored state agrees (finished record, counter 0)', [h['s'] for h in srv['hist']] == [100] and srv['tot'].get('quit', 0) == 0, srv['tot'])
+                # a real abandon afterwards is counted once and survives another duplicated-tab episode
+                await start(q1, 'schulte'); await q1.evaluate("ACT.quit()"); await q1.wait_for_timeout(600)
+                await start(q1, 'schulte'); q3 = await twin(cq, q1, 'he.html')
+                await finish_schulte(q1); await reload(q1); await reload(q2); await reload(q3)
+                ok(f'11 {label}: one real abandon stays counted exactly once after a second episode', [json.loads(await x.evaluate(COUNTS)) for x in (q1, q2, q3)] == [[2, 1, 1, 2]] * 3, [await x.evaluate(COUNTS) for x in (q1, q2, q3)])
+
+            cs = await ctx(); s1 = await page(cs); await plant(s1, 'QA-Stale')
+            await start(s1, 'schulte'); await s1.evaluate("S.cur.at-=31*60*1000;G.t0=S.cur.at;save()"); await s1.wait_for_timeout(600)
+            s2 = await page(cs, 'en.html'); await s2.wait_for_timeout(500)
+            ok('11 round older than 30 minutes: the other tab counts it as abandoned (the cause)', json.loads(await s2.evaluate(COUNTS))[1:3] == [1, 1])
+            await finish_schulte(s1); await reload(s1); await reload(s2)
+            ok('11 ...and the count is corrected once that round is finished', [json.loads(await x.evaluate(COUNTS)) for x in (s1, s2)] == [[1, 0, 0, 1]] * 2, [await x.evaluate(COUNTS) for x in (s1, s2)])
+            cr = await ctx(); r1 = await page(cr); await plant(r1, 'QA-RealQuit')
+            await start(r1, 'schulte'); await reload(r1)
+            r2 = await page(cr, 'en.html'); await r2.evaluate("ACT.water()"); await r2.wait_for_timeout(1900); await reload(r1); await reload(r2)
+            ok('11 a round really left by reloading stays abandoned and counted once across tabs', [json.loads(await x.evaluate(COUNTS)) for x in (r1, r2)] == [[0, 1, 1, 0]] * 2, [await x.evaluate(COUNTS) for x in (r1, r2)])
+
             for f, ver in (('', 'Версия'), ('he.html', 'גרסה'), ('en.html', 'Version')):
                 pg = await page(await ctx(), f)
                 rel = json.load(open(ROOT / 'releases.json'))
