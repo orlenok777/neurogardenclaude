@@ -337,6 +337,92 @@ async def main():
             r2 = await page(cr, 'en.html'); await r2.evaluate("ACT.water()"); await r2.wait_for_timeout(1900); await reload(r1); await reload(r2)
             ok('11 a round really left by reloading stays abandoned and counted once across tabs', [json.loads(await x.evaluate(COUNTS)) for x in (r1, r2)] == [[0, 1, 1, 0]] * 2, [await x.evaluate(COUNTS) for x in (r1, r2)])
 
+            # 12. version 3.5: live panel tools, journal, harvest check on the server, reconnect, contrast, no-save mode
+            V4 = os.environ.get('NG_SCHEMA') != '3'
+            ok('12 honest play in every scenario above was never cut by the server', all(r['act'] != 'clamp' for r in post('/__test/log')), post('/__test/log')[:3])
+            cl1 = await ctx(); l1 = await page(cl1); await plant(l1, 'QA-LiveA')
+            cl2 = await ctx(); l2 = await page(cl2, 'he.html'); await plant(l2, 'QA-LiveB')
+            post('/__test/google', {'email': 'owner@example.test'})
+            co = await ctx(); pn = await page(co, 'en.html#admin'); await google(pn, "isOwner===true")
+            REF = "adminRefresh().then(()=>{render();return true})"
+            MAIN = "document.querySelector('#main').innerText"
+            await start(l1, 'schulte'); await start(l2, 'seq', 2); await l1.wait_for_timeout(600); await pn.evaluate(REF)
+            feed = await pn.evaluate("[...document.querySelectorAll('#feed p')].map(x=>x.innerText).join(' | ')")
+            ok('12 two people play at once: the panel shows both, with game, level and start time, without a reload',
+               'QA-LiveA' in feed and 'QA-LiveB' in feed and 'level 1 of 5' in feed and 'level 3 of 5' in feed and 'Numbers in order' in feed, feed)
+            await pn.select_option('#afilter', 'play'); await pn.wait_for_timeout(200)
+            ok('12 filter "playing now" leaves exactly the two players', json.loads(await pn.evaluate("JSON.stringify([...document.querySelectorAll('.trees .tcard b')].map(x=>x.textContent).sort())")) == ['QA-LiveA', 'QA-LiveB'])
+            before = await pn.evaluate("people.find(p=>p.nick==='QA-LiveA').apples")
+            await finish_schulte(l1); await pn.evaluate(REF)
+            ok('12 the finished round reaches the panel: a ripe apple appears and the player leaves "playing now"',
+               await pn.evaluate("people.find(p=>p.nick==='QA-LiveA').apples") == before + 1 and 'QA-LiveA' not in await pn.evaluate("[...document.querySelectorAll('#feed p')].map(x=>x.innerText).join()"))
+            await l2.evaluate("ACT.quit()"); await l2.wait_for_timeout(600); await pn.evaluate(REF)
+            ok('12 a player who left the game has no ripe apple and an abandoned round in the panel',
+               json.loads(await pn.evaluate("JSON.stringify((p=>[p.apples,p.hist.length,p.hist[0].s,!!p.cur])(people.find(p=>p.nick==='QA-LiveB')))")) == [0, 1, None, False])
+            await pn.select_option('#afilter', 'all'); await pn.fill('#aq', 'livea'); await pn.wait_for_timeout(200)
+            ok('12 search by name keeps focus and narrows the list', await pn.evaluate("document.activeElement.id==='aq'&&document.querySelectorAll('.trees .tcard').length===1"))
+            await pn.fill('#aq', ''); await pn.select_option('#asort', 'apples'); await pn.wait_for_timeout(200)
+            ap = json.loads(await pn.evaluate("JSON.stringify((()=>{const m={};people.forEach(p=>m[p.nick]=p.apples);return [...document.querySelectorAll('.trees .tcard b')].map(x=>m[x.textContent])})())"))
+            ok('12 sort by apples is in descending order', ap == sorted(ap, reverse=True) and len(ap) > 3, ap)
+            await pn.click('.trees .tcard'); await pn.wait_for_timeout(200)
+            ok('12 participant card shows planting date and identifier', 'Tree planted:' in await pn.evaluate(MAIN) and 'Identifier:' in await pn.evaluate(MAIN))
+            ok('12 new panel controls are translated (EN)', not re.search('[А-Яа-яЁё]', await pn.evaluate(MAIN)), re.findall('[А-Яа-яЁё][^\n]{0,30}', await pn.evaluate(MAIN))[:3])
+            # replaying the save of a finished round, and an inflated counter, straight to the API
+            key, pid, rev = await l1.evaluate("KEY"), await l1.evaluate("ACC.active"), await l1.evaluate("REV[ACC.active]")
+            stt = json.loads(await l1.evaluate("JSON.stringify(S)")); real = stt['apples']
+            stt['apples'] = real + 5
+            ans = rpc('ng_save', {'p_key': key, 'p_pid': pid, 'p_state': stt, 'p_rev': rev})
+            stored = [r['state']['apples'] for r in players() if r['state']['nick'] == 'QA-LiveA'][0]
+            ok('12 re-sending the finished round with a bigger counter does not grow the harvest' if V4 else '12 (schema 3 stand) the server stores the counter it is sent', stored == (real if V4 else real + 5) and 'rev' in ans, stored)
+            if V4:
+                await reload(l1)
+                ok('12 after a reload the player still has exactly the earned apples', await l1.evaluate("S.apples") == real and await l1.evaluate(FIN) == 1)
+                rpc('ng_save', {'p_key': 'f' * 40, 'p_pid': 'p1', 'p_state': {'nick': 'QA-Fake', 'apples': 999999, 'hist': []}, 'p_rev': None})
+                await pn.evaluate("location.hash='common'"); await pn.wait_for_timeout(900)
+                ok('12 a tree created with a made-up harvest shows zero apples in the shared garden', await pn.evaluate("(trees.find(t=>t.nick==='QA-Fake')||{}).apples") == 0)
+                await pn.evaluate("location.hash='admin'"); await pn.wait_for_timeout(900)
+            await pn.evaluate("sel=people.find(p=>p.nick==='QA-LiveB').id;render()"); await pn.fill('#cheer', 'QA journal cheer'); await pn.click('[data-act=cheersend]'); await pn.wait_for_timeout(500)
+            await pn.click('[data-act=atab][data-t=log]'); await pn.wait_for_timeout(900)
+            jt = await pn.evaluate(MAIN)
+            if V4:
+                ok('12 journal shows the owner action and the cut harvest', 'Encouragement sent' in jt and 'QA journal cheer' in jt and 'apples sent: 999999, accepted: 0' in jt and 'QA-Fake' in jt, jt[-400:])
+                ok('12 journal is closed to outsiders', status('ng_owner_log')[0] in (401, 403))
+            else:
+                ok('12 (schema 3 stand) journal tab says the server part is not connected yet, the rest of the panel works', 'version 4' in jt and await pn.evaluate("isOwner===true&&people.length>0"), jt[-300:])
+            # many participants: the panel and the shared garden draw in portions
+            for i in range(130):
+                rpc('ng_save', {'p_key': f'{i:040d}', 'p_pid': 'p1', 'p_state': {'nick': f'QA-Bulk{i:03d}', 'apples': 0, 'hist': []}, 'p_rev': None})
+            await pn.click('[data-act=atab][data-t=live]'); await pn.evaluate(REF)
+            n0 = await pn.evaluate("document.querySelectorAll('.trees .tcard').length"); await pn.click('[data-act=amore]'); await pn.wait_for_timeout(200)
+            ok('12 panel draws 60 trees at a time and "show more" adds the next 60', n0 == 60 and await pn.evaluate("document.querySelectorAll('.trees .tcard').length") == 120 and await pn.evaluate("people.length") > 130)
+            await pn.evaluate("location.hash='common'"); await pn.wait_for_timeout(900)
+            n1 = await pn.evaluate("document.querySelectorAll('.trees .tcard').length"); await pn.click('[data-act=cmore]'); await pn.wait_for_timeout(200)
+            ok('12 shared garden draws 60 trees at a time, search still covers all of them', n1 == 60 and await pn.evaluate("document.querySelectorAll('.trees .tcard').length") == 120)
+            await pn.fill('#q', 'bulk129'); await pn.wait_for_timeout(300)
+            ok('12 ...a tree outside the first portion is found by name', await pn.evaluate("document.querySelectorAll('.trees .tcard').length") == 1)
+            # connection lost and restored
+            cn = await ctx(); n1p = await page(cn); await plant(n1p, 'QA-Net'); await n1p.wait_for_timeout(500)
+            await cn.set_offline(True); await start(n1p, 'schulte')
+            for i in range(1, 10): await n1p.click(f'.cell[data-v="{i}"]')
+            await n1p.wait_for_selector('[data-act=again]'); await n1p.wait_for_timeout(900)
+            ok('12 offline: the failed save is reported right on the result screen', await n1p.evaluate("(document.querySelector('#savenote')||{}).textContent===NOSAVE"))
+            await n1p.evaluate("ACT.home()"); await n1p.wait_for_timeout(500)
+            srv = lambda: [r['state'] for r in players() if r['state']['nick'] == 'QA-Net'][0]
+            ok('12 offline: the round is kept in the browser, the player is told, the server has nothing yet', await n1p.evaluate("S.apples===1&&unsaved===true&&notice===NOSAVE") and srv().get('apples', 0) == 0, await n1p.evaluate("JSON.stringify([S.apples,unsaved,notice])"))
+            await cn.set_offline(False); await n1p.evaluate("window.dispatchEvent(new Event('online'))"); await n1p.wait_for_timeout(1500)
+            ok('12 connection back: the result is sent by itself, once, and the message changes', srv()['apples'] == 1 and len(srv()['hist']) == 1 and await n1p.evaluate("unsaved===false&&notice!==NOSAVE"), await n1p.evaluate("JSON.stringify([unsaved,notice])"))
+            # no-save mode leaves no trace
+            cz = await ctx(); z = await page(cz, '#prefs'); await z.check('#m_nosave'); await z.wait_for_timeout(400)
+            npl = len(players()); await z.evaluate("location.hash='garden'"); await z.wait_for_timeout(300); await start(z, 'schulte'); await finish_schulte(z); await z.wait_for_timeout(600)
+            ok('12 no-save mode: the round is played and counted on screen', await z.evaluate("mode==='nosave'&&S.apples===1"))
+            ok('12 no-save mode: nothing on the server and no history in browser storage', len(players()) == npl and await z.evaluate("localStorage.getItem('ng_state')===null&&!JSON.stringify(Object.assign({},localStorage)).includes('schulte')"), await z.evaluate("JSON.stringify(Object.assign({},localStorage))"))
+            await reload(z)
+            ok('12 no-save mode: after a reload the history is gone', await z.evaluate("mode==='nosave'&&S.apples===0&&S.hist.length===0"))
+            # high contrast
+            ch = await ctx(); hc = await page(ch, 'he.html#prefs'); await hc.check('#hc'); await reload(hc)
+            ok('12 high contrast: stays on after a reload, black on white', await hc.evaluate("document.documentElement.classList.contains('hc')&&getComputedStyle(document.body).backgroundColor==='rgb(255, 255, 255)'&&getComputedStyle(document.body).color==='rgb(0, 0, 0)'"))
+            ok('12 high contrast and the new texts are translated (HE)', not re.search('[А-Яа-яЁё]', await hc.evaluate(MAIN)))
+
             for f, ver in (('', 'Версия'), ('he.html', 'גרסה'), ('en.html', 'Version')):
                 pg = await page(await ctx(), f)
                 rel = json.load(open(ROOT / 'releases.json'))

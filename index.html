@@ -27,6 +27,11 @@
   --leaf:#6cc48c; --onleaf:#10200f; --apple:#ef6a5e; --sun:#f2c14e;
   --sky1:#1b2f3d; --sky2:#2a2a22; --soil:#34502f; --ok:#6cc48c;
   --t-mem:#4a2f25; --t-att:#4a4020; --t-log:#223a48; --t-spa:#2d4027; color-scheme:dark;}
+html.hc{--bg:#ffffff;--card:#ffffff;--ink:#000000;--mut:#2b2b2b;--line:#000000;--leaf:#0b5a2a;--onleaf:#ffffff;--apple:#a30f0f;--ok:#0b5a2a}
+@media (prefers-color-scheme:dark){html.hc:not([data-theme="light"]){--bg:#000000;--card:#000000;--ink:#ffffff;--mut:#e8e8e8;--line:#ffffff;--leaf:#8ff0b0;--onleaf:#000000;--apple:#ff8a80;--ok:#8ff0b0}}
+html.hc[data-theme="dark"]{--bg:#000000;--card:#000000;--ink:#ffffff;--mut:#e8e8e8;--line:#ffffff;--leaf:#8ff0b0;--onleaf:#000000;--apple:#ff8a80;--ok:#8ff0b0}
+html.hc button,html.hc input,html.hc select,html.hc .card,html.hc .tile,html.hc .pill{border-width:2px}
+html.hc :focus-visible{outline:4px solid var(--ink);outline-offset:2px}
 *{box-sizing:border-box}
 html{font-size:19px}
 html.big{font-size:23px}
@@ -229,7 +234,7 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
-<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Версия 3.4</b> · обновлена <time datetime="2026-11-13T11:49:05+02:00">13.11.2026 в 11:49</time> <span class="mut">(время Израиля)</span></p><p class="mut" id="prev">Предыдущая версия: 3.3 · <time datetime="2026-11-13T11:04:43+02:00">13.11.2026 в 11:04</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru" aria-current="page">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Версия 3.5</b> · обновлена <time datetime="2026-11-13T14:39:29+02:00">13.11.2026 в 14:39</time> <span class="mut">(время Израиля)</span></p><p class="mut" id="prev">Предыдущая версия: 3.4 · <time datetime="2026-11-13T11:49:05+02:00">13.11.2026 в 11:49</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru" aria-current="page">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>НейроСад</h1><p class="mut small">Маленькие шаги. Каждый день.</p></div>
@@ -315,11 +320,12 @@ const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>re
 const blank=()=>({nick:'',style:0,hidden:false,apples:0,flowers:0,lastVisit:'',days:0,lastDay:'',sec:0,cur:null,hist:[],lv:{},seen:0,water:'',waters:0,born:0,tot:{},visits:[],dev:''});
 let S=blank(), mode='device', ready=false, db=null, user=null, room=null, uid=null, isOwner=false, accountOK=false;
 let route='garden', G=null, notice='', newApple=false, appleSel=null;
-let people=[], names={}, online=new Set(), trees=[], adminTab='live', sel=null, confirmDel=null, search='';
+let people=[], names={}, online=new Set(), trees=[], adminTab='live', sel=null, confirmDel=null, search='', aq='', aFilter='all', aSort='seen', aLim=60, cLim=60, alog=null, unsaved=false;
 let saving=false, dirty=false, lastTree='';
+const NOSAVE='Не удалось сохранить результат в аккаунте. Проверьте интернет: следующая игра повторит сохранение.';
 let words=[], wordDraft='', hereN=0, wordMsg='';
 let tts=null, ttsOff=false, speaking=false, bubble='', cheer=null, cheerMsg='', catF='all';
-const typing=()=>document.activeElement&&['word','q','cheer','apass'].includes(document.activeElement.id);
+const typing=()=>document.activeElement&&['word','q','cheer','apass','aq','afilter','asort'].includes(document.activeElement.id);
 
 let ACC={profiles:{},active:''}, adding=false, breathT=null, REV={};
 /* One id per browser tab (kept across reloads of that tab). It marks which tab a round in progress belongs to. */
@@ -408,6 +414,8 @@ async function tabSync(){
   if(ch&&!(G&&G.active)&&!typing()&&!adding&&route!=='breath')render();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)tabSync()});
+/* Connection is back: send what could not be saved, show up as online again, refresh the open section. */
+window.addEventListener('online',()=>{if(!ready)return;if(unsaved)save();heartbeat();sbRoute()});
 async function sbSave(k){
   const pay=()=>{const q=ACC.profiles[k];if(!q||!q.nick)return null;const st=clone(q);st._mon=monApples(q);st._monKey=monKey();return st};
   let r=null;
@@ -464,8 +472,12 @@ function heartbeat(){if(sbOK&&mode==='account'&&S.nick&&!document.hidden){const 
 async function loadCommon(){const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);trees=(Array.isArray(t)?t:[]).map(x=>cleanTree(x,x&&x.id,x&&x.id));words=(Array.isArray(w)?w:[]).filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id),text:x.text,nick:x.nick,at:num(x.at),mine:x.mine===true}))}
 async function loadAdmin(){
   const rows=((await arpc('ng_owner_list')).rows||[]).filter(r=>r&&typeof r==='object');
-  people=rows.map(r=>Object.assign(cleanState(r.state),{id:String(r.id),uid:String(r.dev),pid:String(r.pid),seen:num(r.seen)}));
+  people=rows.map(r=>Object.assign(cleanState(r.state),{id:String(r.id),uid:String(r.dev),pid:String(r.pid),seen:num(r.seen),created:num(r.created)}));
   online=new Set(rows.filter(r=>num(r.age,1e9)<75).map(r=>String(r.id)));isOwner=true;
+}
+async function loadLog(){
+  try{alog=((await arpc('ng_owner_log')).rows||[]).filter(x=>x&&typeof x==='object').slice(0,200).map(x=>({at:num(x.at),act:String(x.act||'').slice(0,20),nick:String(x.nick||'').slice(0,24),note:String(x.note||'').slice(0,200)}))}
+  catch(e){alog=e&&e.code==='nomig'?'nomig':'error'}
 }
 async function adminRefresh(){
   const closed=()=>{isOwner=false;people=[];online=new Set()};
@@ -475,7 +487,7 @@ async function adminRefresh(){
     const w=await arpc('ng_owner_whoami');AD.assigned=w.assigned===true;
     /* the server no longer has this session (signed out here or elsewhere): drop it in this tab too */
     if(w.session===false){auStore(null);AD.state='out';closed();adminMsg='Сеанс закончился. Войдите снова.';return}
-    if(w.owner===true){await loadAdmin();AD.state='owner'}else{AD.state='denied';closed()}
+    if(w.owner===true){await loadAdmin();AD.state='owner';if(adminTab==='log')await loadLog()}else{AD.state='denied';closed()}
   }catch(e){
     closed();const c=e&&e.code;
     AD.state=c==='signed_out'?'out':c==='nomig'?'nomig':c==='forbidden'?'denied':'error';
@@ -516,11 +528,13 @@ async function save(){
         if(Object.keys(list).length)await db.doc('trees/'+uid).set({list});else await db.doc('trees/'+uid).delete();
         lastTree=t;
       }}
+      if(unsaved){unsaved=false;if(notice===NOSAVE)notice='Связь восстановилась, результат сохранён.';if((route==='garden'&&!adding)||(route==='play'&&G&&!G.active&&G.res))render()}
     }catch(e){
+      unsaved=true;
       if(e&&e.code==='invalid_argument'){
         mode='device';accountOK=false;lsSet('ng_mode','device');lsSet('ng_state',JSON.stringify(ACC));
         notice='Сохранение в аккаунте недоступно при вашем уровне доступа к странице. Сад сохраняется на этом устройстве.';
-      }else notice='Не удалось сохранить результат в аккаунте. Проверьте интернет: следующая игра повторит сохранение.';
+      }else notice=NOSAVE;
       if(route!=='play'||!G||!G.active)render();
       break;
     }
@@ -581,6 +595,7 @@ async function init(){
 function applyUI(ui){
   document.documentElement.classList.toggle('big',!!ui.big);
   document.documentElement.classList.toggle('still',!!ui.still);
+  document.documentElement.classList.toggle('hc',!!ui.hc);
   $('#aplus').setAttribute('aria-pressed',ui.big?'true':'false');
 }
 const getUI=()=>{try{return JSON.parse(lsGet('ng_ui')||'{}')}catch(e){return{}}};
@@ -774,8 +789,8 @@ function mkSeries(l){
   else if(l===1){const d=3+rnd(7),s=60+rnd(30);seq=gen(i=>s-d*i);rule=`каждое число на ${d} меньше предыдущего`}
   else if(l===2){if(rnd(2)){const m=2+rnd(2),b=1+rnd(4);seq=gen(i=>b*m**i);rule=`каждое число в ${m} раза больше предыдущего`}
     else{const p=2+rnd(3),q=6+rnd(4);seq=gen(i=>a+Math.ceil(i/2)*p+Math.floor(i/2)*q);rule=`по очереди прибавляется ${p} и ${q}`}}
-  else if(l===3){if(rnd(2)){seq=gen(i=>a+i*(i+1)/2);rule='прибавляется 1, потом 2, потом 3 и так далее'}
-    else{const b=1+rnd(5);seq=gen(i=>(i+b)**2);rule=`это квадраты чисел подряд, начиная с ${b}×${b}`}}
+  else if(l===3){if(rnd(2)){const a2=a+rnd(21);seq=gen(i=>a2+i*(i+1)/2);rule='прибавляется 1, потом 2, потом 3 и так далее'}
+    else{const b=1+rnd(9);seq=gen(i=>(i+b)**2);rule=`это квадраты чисел подряд, начиная с ${b}×${b}`}}
   else{const v=rnd(3);
     if(v===0){seq=[a,a+1+rnd(4)];while(seq.length<6)seq.push(seq.at(-1)+seq.at(-2));rule='каждое число равно сумме двух предыдущих'}
     else if(v===1){seq=[a];while(seq.length<6)seq.push(seq.at(-1)*2+1);rule='число умножается на 2 и прибавляется 1'}
@@ -812,7 +827,7 @@ function waterSolve(a,b,t){
 }
 game('water','Водный сад','log','Отмерьте нужное количество воды с помощью двух леек.',
  'Лейки можно наполнять, переливать из одной в другую и выливать. Получите в любой лейке нужное число литров, пока не закончились ходы.',c=>{
-  const [a,b,t,slack]=[[3,5,1,4],[3,5,4,3],[4,7,5,3],[5,8,6,2],[7,11,6,2]][c.lvl];
+  const [a,b,t,slack]=[[3,5,1,4],[3,5,4,3],[4,7,5,3],[5,8,7,2],[7,11,6,2]][c.lvl];
   const sol=waterSolve(a,b,t),max=sol.length+slack;let x=0,y=0,used=0;const H=l=>40+l*14;
   c.box.innerHTML=`<p class="hint"></p><div class="jugs"><div><div class="jug" style="height:${H(a)}px"><i id="ja"></i></div><p class="jugcap" id="ca"></p></div><div><div class="jug" style="height:${H(b)}px"><i id="jb"></i></div><p class="jugcap" id="cb"></p></div></div><div class="opts">${WMOVES.map((m,i)=>`<button data-m="${i}">${m[0]}</button>`).join('')}</div>`;
   const draw=()=>{$('#ja',c.box).style.height=(x/a*100)+'%';$('#jb',c.box).style.height=(y/b*100)+'%';
@@ -1206,7 +1221,7 @@ function vPlay(){
     ${r.explain?`<p class="note">${esc(r.explain)}</p>`:''}
     <div class="row"><button class="pri" data-act="real">Играть по-настоящему</button><button data-act="again">Ещё пробный раунд</button><button data-act="home">Вернуться в сад</button></div></section>`;
     return `<section class="card"><h2>${r.ok?'Яблоко созрело!':'Раунд завершён'}</h2>
-    ${scene(treeSVG(S,{fruits:fruitsOf(S),fresh:true}))}<p>${esc(r.msg)}</p><p class="mut">${r.ok?'На вашем дереве выросло новое спелое яблоко.':'Яблоко пока зелёное. Можно попробовать ещё раз или выбрать уровень проще.'}</p>
+    ${scene(treeSVG(S,{fruits:fruitsOf(S),fresh:true}))}<p>${esc(r.msg)}</p><p class="mut">${r.ok?'На вашем дереве выросло новое спелое яблоко.':'Яблоко пока зелёное. Можно попробовать ещё раз или выбрать уровень проще.'}</p>${notice?`<p class="note" role="status" id="savenote">${esc(notice)}</p>`:''}
     <div class="tiles"><div class="tile"><b>${r.score}%</b><span>результат</span></div><div class="tile"><b>${dur(r.d)}</b><span>время</span></div><div class="tile"><b>${r.err}</b><span>ошибок</span></div><div class="tile"><b>${G.lvl+1} из 5</b><span>уровень</span></div></div>
     ${r.explain?`<p class="note" id="expl" hidden>${esc(r.explain)}</p>`:''}
     <div class="row"><button class="pri" data-act="again">Повторить</button>${r.ok&&G.lvl<4?'<button data-act="nextlvl">Следующий уровень</button>':''}${r.explain?'<button data-act="explain">Показать объяснение</button>':''}<button data-act="home">Вернуться в сад</button>${sayBtn(r.msg)}</div></section>`}
@@ -1363,7 +1378,7 @@ function vCommon(){
   return `<section class="card"><h2>Общий сад</h2><p>Деревьев: ${trees.length}. Всего выращено яблок: ${total}.${hereN>1?` Сейчас в саду ${hereN} чел.`:''}</p>
    <div><p class="small mut">Урожай месяца: ${harv} из ${goal} яблок. Его растят все вместе.</p><div class="bar"><i style="width:${Math.min(100,harv/goal*100).toFixed(0)}%"></i></div></div>
    <div class="row"><label for="q" class="small mut">Найти дерево по имени</label><input type="text" id="q" value="${esc(search)}" data-in="search"></div>
-   ${list.length?`<div class="trees">${list.map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'Без имени')}</b><span class="small mut">${+t.apples||0} яблок${t.id===myTreeId()?' · это вы':''}</span></div>`).join('')}</div>`:`<p class="mut">${trees.length?'Такого дерева нет.':'В общем саду пока нет деревьев. Первое появится после первой посадки.'}</p>`}
+   ${list.length?`<div class="trees">${list.slice(0,cLim).map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'Без имени')}</b><span class="small mut">${+t.apples||0} яблок${t.id===myTreeId()?' · это вы':''}</span></div>`).join('')}</div>${list.length>cLim?`<p class="small mut">Показано деревьев: ${cLim} из ${list.length}</p><div class="row"><button data-act="cmore">Показать ещё деревья</button></div>`:''}`:`<p class="mut">${trees.length?'Такого дерева нет.':'В общем саду пока нет деревьев. Первое появится после первой посадки.'}</p>`}
    <p class="small mut">Здесь видны только имя дерева, яблоки и цветы. Игры, результаты и время занятий другим участникам не показываются.</p></section>
   <section class="card"><h2>Добрые слова</h2><p class="mut">Оставьте пожелание другим садовникам. У каждого одно пожелание, его можно менять.</p>
    ${ws.length?`<div class="list">${ws.map(w=>`<div class="word"><p>${esc(w.text.slice(0,140))}<br><span class="small mut">${esc(typeof w.nick==='string'&&w.nick?w.nick.slice(0,24):'Участник сада')}${isMine(w)?' · это вы':''}</span></p>${isMine(w)||isOwner?`<button data-act="worddel" data-id="${esc(w.id)}">Убрать</button>`:''}</div>`).join('')}</div>`:'<p class="mut">Пока никто ничего не написал. Ваше пожелание может стать первым.</p>'}
@@ -1384,6 +1399,7 @@ function adminDetail(p,s){
   <p>${c?(s.on?'Играет: ':'Начато и не завершено: ')+`«${esc(gname(c.g))}», уровень ${c.l+1} из 5, начало: ${when(c.at)}`:'Сейчас не играет.'}</p>
   <div class="tiles"><div class="tile"><b>${s.today}</b><span>сегодня</span></div><div class="tile"><b>${s.week}</b><span>за неделю</span></div><div class="tile"><b>${s.month}</b><span>за месяц</span></div><div class="tile"><b>${+p.apples||0}</b><span>спелых яблок</span></div><div class="tile"><b>${+p.days||0}</b><span>дней с практикой</span></div><div class="tile"><b>${Math.round((+p.sec||0)/60)} мин</b><span>в упражнениях</span></div></div>
   <p>Последний результат: ${s.last?`${s.last.s}% в «${esc(gname(s.last.g))}»`:'пока нет'}. Последний визит: ${when(p.seen)}.${p.hidden?' Дерево скрыто из общего сада.':''}</p>
+  <p class="small mut">Дерево посажено: ${when(p.created||p.born)}. Идентификатор: <span style="user-select:all">${esc(String(p.id).slice(0,8))}</span></p>
   <h3>Две недели</h3>${calendar(p)}
   <h3>По упражнениям</h3>${gameTable(p)}
   <h3>Награды</h3>${awardsHTML(p)}
@@ -1408,21 +1424,40 @@ function vAdmin(){
   if(!isOwner)return `<section class="card"><h2>Панель администратора</h2><p>Этот раздел открыт только владельцу сада.</p></section>`;
   const st=people.map(p=>[p,pstat(p)]);
   const tiles=`<div class="tiles"><div class="tile"><b>${people.length}</b><span>участников</span></div><div class="tile"><b>${st.filter(x=>x[1].on).length}</b><span>онлайн сейчас</span></div><div class="tile"><b>${st.filter(x=>x[1].playing).length}</b><span>играют сейчас</span></div><div class="tile"><b>${st.reduce((a,x)=>a+x[1].today,0)}</b><span>яблок за сегодня</span></div></div>`;
-  const tabs=`<div class="chips">${[['live','Живой сад'],['list','Участники'],['hist','История занятий'],['max','Максимальная статистика']].map(t=>`<button data-act="atab" data-t="${t[0]}" aria-pressed="${adminTab===t[0]}">${t[1]}</button>`).join('')}</div>`;
+  const tabs=`<div class="chips">${[['live','Живой сад'],['list','Участники'],['hist','История занятий'],['max','Максимальная статистика']].concat(sbOK?[['log','Журнал действий']]:[]).map(t=>`<button data-act="atab" data-t="${t[0]}" aria-pressed="${adminTab===t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
-  if(!people.length)body=`<p class="mut">Пока никто не посадил дерево в режиме «Аккаунт». Участники появятся здесь сразу после посадки.</p>`;
+  const q=aq.trim().toLowerCase(),bornOf=p=>p.created||p.born||0;
+  const FILT={all:['Все участники',()=>true],on:['Сейчас онлайн',(p,s)=>s.on],play:['Играют сейчас',(p,s)=>s.playing],today:['Занимались сегодня',(p,s)=>s.today>0],idle:['Не заходили неделю',p=>Date.now()-(p.seen||0)>7*864e5]};
+  const SORT={seen:['Сначала недавние',(a,b)=>(b[1].playing-a[1].playing)||(b[1].on-a[1].on)||((b[0].seen||0)-(a[0].seen||0))],apples:['По числу яблок',(a,b)=>(+b[0].apples||0)-(+a[0].apples||0)],name:['По имени',(a,b)=>String(a[0].nick||'').localeCompare(String(b[0].nick||''),LOC)],born:['Сначала новые деревья',(a,b)=>bornOf(b[0])-bornOf(a[0])]};
+  const view=st.filter(([p,s])=>(!q||String(p.nick||'').toLowerCase().includes(q)||String(p.id).toLowerCase().startsWith(q))&&(FILT[aFilter]||FILT.all)[1](p,s)).sort((SORT[aSort]||SORT.seen)[1]);
+  const shown=view.slice(0,aLim),more=view.length>shown.length?`<div class="row"><button data-act="amore">Показать ещё участников</button></div>`:'';
+  const tools=`<div class="row"><label for="aq" class="small mut" style="flex-basis:100%">Найти участника по имени</label><input type="text" id="aq" value="${esc(aq)}" data-in="aq" style="flex:1 1 180px">
+    <select id="afilter" data-in="afilter" aria-label="Кого показать">${Object.entries(FILT).map(([k,v])=>`<option value="${k}" ${aFilter===k?'selected':''}>${v[0]}</option>`).join('')}</select>
+    <select id="asort" data-in="asort" aria-label="Порядок списка">${Object.entries(SORT).map(([k,v])=>`<option value="${k}" ${aSort===k?'selected':''}>${v[0]}</option>`).join('')}</select></div>
+    <p class="small mut" role="status">Показано участников: ${shown.length} из ${view.length}</p>`;
+  const nowp=st.filter(x=>x[1].playing).sort((a,b)=>b[0].cur.at-a[0].cur.at);
+  const feed=`<h3>Сейчас играют</h3>${nowp.length?`<div class="list" id="feed">${nowp.slice(0,20).map(([p])=>`<p class="note" style="margin:0"><b>${esc(p.nick||'Без имени')}</b> · «${esc(gname(p.cur.g))}» · уровень ${p.cur.l+1} из 5, начало: ${when(p.cur.at)}</p>`).join('')}</div>`:'<p class="mut">Сейчас никто не играет.</p>'}`;
+  if(adminTab==='log'){
+    const ACTS={clamp:'Срезан лишний урожай',delete:'Удалён участник',cheer:'Отправлено ободрение',word_del:'Убрано пожелание'};
+    const note=x=>{const m=/^(\d+)>(\d+)$/.exec(x.note);return x.act==='clamp'&&m?`яблок прислано: ${m[1]}, принято: ${m[2]}`:x.act==='delete'&&/^\d+$/.test(x.note)?`яблок было: ${x.note}`:esc(x.note)};
+    body=alog===null?'<p class="mut">Загружаем журнал…</p>':alog==='nomig'?'<p class="note">Журнал появится после подключения серверной части версии 4.</p>':alog==='error'?'<p class="note">Журнал сейчас недоступен. Попробуйте позже.</p>'
+      :alog.length?`<div class="scroll"><table><thead><tr><th>Когда</th><th>Действие</th><th>Участник</th><th>Подробности</th></tr></thead><tbody>${alog.map(x=>`<tr><td>${when(x.at)}</td><td>${ACTS[x.act]||esc(x.act)}</td><td>${esc(x.nick||'—')}</td><td>${note(x)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">В журнале пока нет записей.</p>';
+    body=`<p class="small mut">Здесь записаны ваши действия в панели и случаи, когда сервер не принял лишние яблоки.</p>`+body;
+  }
+  else if(!people.length)body=`<p class="mut">Пока никто не посадил дерево в режиме «Аккаунт». Участники появятся здесь сразу после посадки.</p>`;
   else if(adminTab==='live'){
-    body=`<div class="trees">${st.map(([p,s])=>`<button class="tcard${s.playing?' glow':''}" data-act="sel" data-id="${esc(p.id)}" aria-pressed="${sel===p.id}">${treeSVG(p,{cur:!!p.cur,fruits:fruitsOf(p)})}<b>${esc(p.nick||'Без имени')}</b><span class="pill ${s.playing?'play':s.on?'on':''}">${s.playing?'играет':s.on?'онлайн':'не в сети'}</span></button>`).join('')}</div>`;
+    body=feed+tools+`<div class="trees">${shown.map(([p,s])=>`<button class="tcard${s.playing?' glow':''}" data-act="sel" data-id="${esc(p.id)}" aria-pressed="${sel===p.id}">${treeSVG(p,{cur:!!p.cur,fruits:fruitsOf(p)})}<b>${esc(p.nick||'Без имени')}</b><span class="pill ${s.playing?'play':s.on?'on':''}">${s.playing?'играет':s.on?'онлайн':'не в сети'}</span></button>`).join('')}</div>`+(view.length?'':'<p class="mut">Никто не подходит под эти условия.</p>')+more;
     const f=st.find(x=>x[0].id===sel);
     if(f){const [p,s]=f,c=p.cur;
       body+=adminDetail(p,s)}
   }else if(adminTab==='max'){body=vStats();
   }else if(adminTab==='list'){
-    body=`<div class="scroll"><table><thead><tr><th>Участник</th><th>Статус</th><th>Сегодня</th><th>Неделя</th><th>Месяц</th><th>Яблок</th><th>Последний визит</th></tr></thead><tbody>${st.map(([p,s])=>`<tr><td>${pname(p)}</td><td>${s.playing?'играет: '+esc(gname(p.cur.g)):s.on?'онлайн':'не в сети'}</td><td>${s.today}</td><td>${s.week}</td><td>${s.month}</td><td>${+p.apples||0}</td><td>${when(p.seen)}</td></tr>`).join('')}</tbody></table></div>
+    body=tools+`<div class="scroll"><table><thead><tr><th>Участник</th><th>Статус</th><th>Сегодня</th><th>Неделя</th><th>Месяц</th><th>Яблок</th><th>Последний визит</th><th>Посажено</th></tr></thead><tbody>${shown.map(([p,s])=>`<tr><td>${pname(p)}</td><td>${s.playing?'играет: '+esc(gname(p.cur.g)):s.on?'онлайн':'не в сети'}</td><td>${s.today}</td><td>${s.week}</td><td>${s.month}</td><td>${+p.apples||0}</td><td>${when(p.seen)}</td><td>${bornOf(p)?dm(bornOf(p)):'—'}</td></tr>`).join('')}</tbody></table></div>${more}
     <div class="row"><button data-act="csv">Скопировать таблицу как CSV</button><span id="copied" class="small mut" role="status"></span></div>`;
   }else{
-    const all=st.flatMap(([p,s])=>s.h.map(x=>[p,x])).sort((a,b)=>b[1].at-a[1].at).slice(0,60);
-    body=all.length?`<div class="scroll"><table><thead><tr><th>Когда</th><th>Участник</th><th>Упражнение</th><th>Уровень</th><th>Результат</th></tr></thead><tbody>${all.map(([p,x])=>`<tr><td>${when(x.at)}</td><td>${esc(p.nick||'Без имени')}</td><td>${esc(gname(x.g))}</td><td>${x.l+1}</td><td>${x.s==null?'не завершено':x.s+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">Занятий пока не было.</p>';
+    body=tools;
+    const all=view.flatMap(([p,s])=>s.h.map(x=>[p,x])).sort((a,b)=>b[1].at-a[1].at).slice(0,60);
+    body+=all.length?`<div class="scroll"><table><thead><tr><th>Когда</th><th>Участник</th><th>Упражнение</th><th>Уровень</th><th>Результат</th></tr></thead><tbody>${all.map(([p,x])=>`<tr><td>${when(x.at)}</td><td>${esc(p.nick||'Без имени')}</td><td>${esc(gname(x.g))}</td><td>${x.l+1}</td><td>${x.s==null?'не завершено':x.s+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">Занятий пока не было.</p>';
   }
   return `<section class="card"><div class="row between"><h2>Панель Ромы</h2>${sbOK?'<button data-act="alogout">Выйти из панели</button>':''}</div><p class="mut">Данные приходят из базы и обновляются без перезагрузки. Гости в режиме «Без сохранения» сюда не попадают.</p>${tiles}${tabs}${body}</section>`;
 }
@@ -1439,6 +1474,7 @@ function vPrefs(){
     <label class="radio"><input type="checkbox" id="hidden" data-in="hidden" ${S.hidden?'checked':''}><span><b>Скрыть дерево из общего сада</b><br><span class="small mut">Дерево останется в вашем саду и в панели администратора.</span></span></label></section>
   <section class="card"><h2>Удобство</h2>
     <label class="radio"><input type="checkbox" id="big" data-in="big" ${ui.big?'checked':''}><span><b>Крупный текст</b></span></label>
+    <label class="radio"><input type="checkbox" id="hc" data-in="hc" ${ui.hc?'checked':''}><span><b>Высокая контрастность</b><br><span class="small mut">Чёрный текст на белом и заметные рамки.</span></span></label>
     <label class="radio"><input type="checkbox" id="still" data-in="still" ${ui.still?'checked':''}><span><b>Отключить анимацию</b></span></label>
     <label class="radio"><input type="checkbox" id="mute" data-in="mute" ${ui.mute?'checked':''}><span><b>Выключить звуки</b></span></label></section>
   <section class="card"><h2>Удаление данных</h2><p>Удаляются дерево и история имени, под которым вы сейчас играете. Другие имена остаются.</p>
@@ -1448,7 +1484,7 @@ const ROUTES={garden:['Мой сад',vGarden],games:['Упражнения',vGa
 function render(){
   $('#nav').innerHTML=Object.entries(ROUTES).filter(([k])=>k!=='admin'||isOwner||sbOK).map(([k,v])=>`<a href="#${k}" ${route===k?'aria-current="page"':''}>${v[0]}</a>`).join('');
   $('#main').innerHTML=route==='play'&&G?vPlay():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
-  if(route!=='garden')notice='';
+  if(route!=='garden'&&route!=='play')notice='';   /* a save that failed on the result screen must still be reported */
 }
 function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
 window.addEventListener('hashchange',go);
@@ -1483,7 +1519,9 @@ const ACT={
   quit(){abandon();go()},
   home(){G=null;if(location.hash==='#garden'||location.hash==='')go();else location.hash='garden'},
   apple(e){appleSel=+e.dataset.i;render()},
-  atab(e){adminTab=e.dataset.t;render()},
+  atab(e){adminTab=e.dataset.t;aLim=60;render();if(adminTab==='log'&&sbOK)loadLog().then(()=>{if(route==='admin'&&adminTab==='log')render()})},
+  amore(){aLim+=60;render()},
+  cmore(){cLim+=60;render()},
   sel(e){sel=sel===e.dataset.id?null:e.dataset.id;confirmDel=null;cheerMsg='';appleSel=null;render()},
   delask(e){confirmDel=e.dataset.id;render()},
   delno(){confirmDel=null;render()},
@@ -1539,12 +1577,15 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('g[data-act]')){e.preventDefault();ACT[e.target.dataset.act](e.target)}
   if(e.key==='Enter'&&e.target.id==='nick')ACT.plant()});
 document.addEventListener('input',e=>{if(e.target.dataset.in==='word'){wordDraft=e.target.value;return}
-  if(e.target.dataset.in==='search'){search=e.target.value;const pos=e.target.selectionStart;render();const q=$('#q');if(q){q.focus();q.setSelectionRange(pos,pos)}}});
-document.addEventListener('change',async e=>{const k=e.target.dataset.in;if(!k||k==='search'||k==='word')return;
+  if(e.target.dataset.in==='aq'){aq=e.target.value;aLim=60;const pos=e.target.selectionStart;render();const q=$('#aq');if(q){q.focus();q.setSelectionRange(pos,pos)}return}
+  if(e.target.dataset.in==='search'){search=e.target.value;cLim=60;const pos=e.target.selectionStart;render();const q=$('#q');if(q){q.focus();q.setSelectionRange(pos,pos)}}});
+document.addEventListener('change',async e=>{const k=e.target.dataset.in;if(!k||k==='search'||k==='word'||k==='aq')return;
   if(k==='mode'){await setMode(e.target.value);render()}
   if(k==='style'){S.style=+e.target.value;save()}
   if(k==='hidden'){S.hidden=e.target.checked;save()}
-  if(k==='big'||k==='still'||k==='mute'){const ui=getUI();ui[k]=e.target.checked;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui)}
+  if(k==='afilter'){aFilter=e.target.value;aLim=60;render();return}
+  if(k==='asort'){aSort=e.target.value;aLim=60;render();return}
+  if(k==='big'||k==='still'||k==='mute'||k==='hc'){const ui=getUI();ui[k]=e.target.checked;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui)}
 });
 const h0=location.hash.slice(1);route=ROUTES[h0]?h0:'garden';render();
 init().catch(()=>{ready=true;render()});
