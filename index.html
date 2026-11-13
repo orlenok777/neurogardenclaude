@@ -180,6 +180,33 @@ span.cell{border:1.5px solid var(--line);background:var(--card)}
 .opts button{display:flex;align-items:center;justify-content:center;gap:8px}
 .mini.glow i.f{background:var(--sun)}
 h3{margin-top:6px}
+
+:root{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--s1:#3987e5;--s2:#d95926;--s3:#199e70}}
+:root[data-theme="dark"]{--s1:#3987e5;--s2:#d95926;--s3:#199e70}
+.hbars{display:flex;flex-direction:column;gap:6px}
+.hb{display:grid;grid-template-columns:minmax(120px,44%) 1fr auto;gap:8px;align-items:center;font-size:.85rem}
+.hb>span:first-child{overflow-wrap:break-word;hyphens:auto}
+.hb .tr{display:block}
+.hb i{display:block;height:12px;border-radius:0 4px 4px 0;background:var(--s1)}
+.hb b{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+.hb small{color:var(--mut);font-weight:400}
+.vbars{display:flex;gap:3px;align-items:flex-end;padding-top:4px}
+.vb{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.vb .st{display:flex;flex-direction:column-reverse;gap:2px;width:min(100%,22px)}
+.vb .st i{display:block;border-radius:4px}
+.vb .st i:not(:first-child){border-radius:2px}
+.vb .st i:last-child{border-radius:4px 4px 2px 2px}
+.vb .st i:only-child{border-radius:4px 4px 0 0}
+.vb span{font-size:.65rem;color:var(--mut);font-variant-numeric:tabular-nums}
+.vb small{font-size:.65rem;font-variant-numeric:tabular-nums;min-height:1em}
+.s1{background:var(--s1)} .s2{background:var(--s2)} .s3{background:var(--s3)}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin:0 4px 0 10px;vertical-align:-1px}
+.sw:first-child{margin-left:0}
+.breath{width:190px;height:190px;border-radius:50%;background:var(--t-spa);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:1.5rem;animation:breathe 10s ease-in-out infinite}
+@keyframes breathe{0%{transform:scale(.68)}40%{transform:scale(1)}100%{transform:scale(.68)}}
+.still .breath{animation:none}
+@media (prefers-reduced-motion:reduce){.breath{animation:none}}
 </style>
 </head>
 <body>
@@ -219,7 +246,7 @@ const lsSet=(k,v)=>{try{v===null?localStorage.removeItem(k):localStorage.setItem
 const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej({code:'timeout'}),ms))]);
 
 /* ---------- state ---------- */
-const blank=()=>({nick:'',style:0,hidden:false,apples:0,flowers:0,lastVisit:'',days:0,lastDay:'',sec:0,cur:null,hist:[],lv:{},seen:0,water:'',waters:0});
+const blank=()=>({nick:'',style:0,hidden:false,apples:0,flowers:0,lastVisit:'',days:0,lastDay:'',sec:0,cur:null,hist:[],lv:{},seen:0,water:'',waters:0,born:0,tot:{},visits:[],dev:''});
 let S=blank(), mode='device', ready=false, db=null, user=null, room=null, uid=null, isOwner=false, accountOK=false;
 let route='garden', G=null, notice='', newApple=false, appleSel=null;
 let people=[], names={}, online=new Set(), trees=[], adminTab='live', sel=null, confirmDel=null, search='';
@@ -228,27 +255,50 @@ let words=[], wordDraft='', hereN=0, wordMsg='';
 let tts=null, ttsOff=false, speaking=false, bubble='', cheer=null, cheerMsg='', catF='all';
 const typing=()=>document.activeElement&&['word','q','cheer'].includes(document.activeElement.id);
 
+let ACC={profiles:{},active:''}, adding=false, breathT=null;
+const clone=o=>JSON.parse(JSON.stringify(o));
+const newPid=()=>'p'+Date.now().toString(36)+rnd(1296).toString(36);
+const bump=k=>{if(!S.tot||typeof S.tot!=='object')S.tot={};S.tot[k]=(S.tot[k]||0)+1};
+const monKey=()=>DAY().slice(0,7);
+const monApples=st=>(Array.isArray(st.hist)?st.hist:[]).filter(h=>h.ok&&dayOf(h.at).slice(0,7)===monKey()).length;
+/* One stored document holds every name created on this account or device: {profiles:{id:state}, active:id}. */
+function normalize(o){
+  let pr={};
+  if(o&&o.profiles&&typeof o.profiles==='object')pr=o.profiles;else if(o&&o.nick)pr={p1:o};
+  const out={profiles:{},active:(o&&o.active)||''};
+  Object.keys(pr).slice(0,8).forEach(k=>{const st=Object.assign(blank(),pr[k]);if(!Array.isArray(st.hist))st.hist=[];if(!st.lv||typeof st.lv!=='object')st.lv={};if(!st.tot||typeof st.tot!=='object')st.tot={};out.profiles[k]=st});
+  return out;
+}
+function useProfile(pid){ACC.active=pid;S=ACC.profiles[pid];housekeeping()}
+const pres=()=>{if(room)room.presence({acc:mode==='account'&&S.nick?1:null,pid:ACC.active||null}).catch(()=>{})};
 function housekeeping(){
-  if(S.cur){S.hist.push({g:S.cur.g,l:S.cur.l,at:S.cur.at,d:0,s:null,ok:false});S.cur=null}
+  if(!S.tot||typeof S.tot!=='object')S.tot={};
+  if(S.cur){S.hist.push({g:S.cur.g,l:S.cur.l,at:S.cur.at,d:0,s:null,ok:false});S.cur=null;bump('quit')}
   if(S.lastVisit!==DAY()){S.flowers++;S.lastVisit=DAY()}
-  S.seen=Date.now();
+  S.seen=Date.now();if(!Array.isArray(S.visits))S.visits=[];S.visits.push(S.seen);if(S.visits.length>60)S.visits=S.visits.slice(-60);
+  S.dev=Math.min(screen.width||9999,innerWidth||9999)<700?'phone':'desk';
+}
+function treeDoc(){
+  const list={};
+  Object.entries(ACC.profiles).forEach(([k,q])=>{if(q.nick&&!q.hidden)list[k]={nick:q.nick,style:q.style,apples:q.apples,flowers:q.flowers,waters:q.waters||0,mon:monApples(q),monKey:monKey()}});
+  return list;
 }
 async function save(){
   if(mode==='nosave'||!S.nick)return;
-  if(mode==='device'){lsSet('ng_state',JSON.stringify(S));return}
+  if(mode==='device'){lsSet('ng_state',JSON.stringify(ACC));return}
   dirty=true;if(saving)return;saving=true;
   while(dirty){
     dirty=false;
     try{
-      await db.doc('activity/'+uid).set(JSON.parse(JSON.stringify(S)));
-      const t=S.hidden?'hidden':JSON.stringify({nick:S.nick,style:S.style,apples:S.apples,flowers:S.flowers,waters:S.waters||0});
+      await db.doc('activity/'+uid).set(clone(ACC));
+      const list=treeDoc(),t=JSON.stringify(list);
       if(t!==lastTree){
-        if(S.hidden)await db.doc('trees/'+uid).delete();else await db.doc('trees/'+uid).set(JSON.parse(t));
+        if(Object.keys(list).length)await db.doc('trees/'+uid).set({list});else await db.doc('trees/'+uid).delete();
         lastTree=t;
       }
     }catch(e){
       if(e&&e.code==='invalid_argument'){
-        mode='device';accountOK=false;lsSet('ng_mode','device');lsSet('ng_state',JSON.stringify(S));
+        mode='device';accountOK=false;lsSet('ng_mode','device');lsSet('ng_state',JSON.stringify(ACC));
         notice='Сохранение в аккаунте недоступно при вашем уровне доступа к странице. Сад сохраняется на этом устройстве.';
       }else notice='Не удалось сохранить результат в аккаунте. Проверьте интернет: следующая игра повторит сохранение.';
       if(route!=='play'||!G||!G.active)render();
@@ -258,17 +308,16 @@ async function save(){
   saving=false;
 }
 async function setMode(m){
-  mode=m;lsSet('ng_mode',m);lastTree='';
+  mode=m;lsSet('ng_mode',m);lastTree='';let raw=null;
   if(m==='account'){
-    try{const snap=await withTimeout(db.doc('activity/'+uid).get(),10000);
-      S=snap.exists?Object.assign(blank(),JSON.parse(JSON.stringify(snap.data()))):blank();
-    }catch(e){mode='device';notice='Не удалось связаться с хранилищем аккаунта. Пока сад сохраняется на этом устройстве.';}
+    try{const snap=await withTimeout(db.doc('activity/'+uid).get(),10000);raw=snap.exists?clone(snap.data()):null}
+    catch(e){mode='device';notice='Не удалось связаться с хранилищем аккаунта. Пока сад сохраняется на этом устройстве.'}
   }
-  if(mode==='device'){let o={};try{o=JSON.parse(lsGet('ng_state')||'{}')}catch(e){}S=Object.assign(blank(),o)}
-  if(mode==='nosave')S=blank();
-  if(!Array.isArray(S.hist))S.hist=[];if(!S.lv||typeof S.lv!=='object')S.lv={};
-  housekeeping();save();
-  if(room)room.presence({acc:mode==='account'&&S.nick?1:null}).catch(()=>{});
+  if(mode==='device'){try{raw=JSON.parse(lsGet('ng_state')||'null')}catch(e){raw=null}}
+  ACC=mode==='nosave'?{profiles:{g:blank()},active:'g'}:normalize(raw);
+  const ids=Object.keys(ACC.profiles);
+  if(ids.length)useProfile(ACC.profiles[ACC.active]?ACC.active:ids[0]);else{ACC.active='';S=blank()}
+  adding=false;save();pres();
 }
 async function init(){
   const ui=JSON.parse(lsGet('ng_ui')||'{}');applyUI(ui);
@@ -284,17 +333,17 @@ async function init(){
   await setMode(m);
   if(db){
     if(uid)db.doc('cheers/'+uid).onSnapshot(sn=>{cheer=sn.exists?sn.data():null;if(route==='garden')render()},()=>{});
-    db.collection('trees').onSnapshot(q=>{trees=q.docs.map(d=>Object.assign({id:d.id},d.data()));if(route==='common'&&!typing())render()},()=>{});
+    db.collection('trees').onSnapshot(q=>{trees=q.docs.flatMap(d=>{const x=d.data()||{};return x.list?Object.entries(x.list).map(([k,t])=>Object.assign({},t,{id:d.id+'~'+k,uid:d.id})):[Object.assign({},x,{id:d.id,uid:d.id})]});if(route==='common'&&!typing())render()},()=>{});
     db.collection('words').onSnapshot(q=>{words=q.docs.map(d=>Object.assign({id:d.id},d.data()));if(route==='common'&&!typing())render()},()=>{});
     if(isOwner)db.collection('activity').onSnapshot(q=>{
-      people=q.docs.map(d=>Object.assign({id:d.id},d.data()));
+      people=q.docs.flatMap(d=>{const x=d.data()||{},pr=x.profiles||(x.nick?{p1:x}:{});return Object.entries(pr).map(([k,st])=>Object.assign({},st,{id:d.id+'~'+k,uid:d.id,pid:k}))});
       if(route==='admin'&&!typing())render();
-      if(user)user.profiles(people.map(p=>p.id)).then(ps=>{names=ps;if(route==='admin'&&!typing())render()});
+      if(user)user.profiles([...new Set(people.map(p=>p.uid))]).then(ps=>{names=ps;if(route==='admin'&&!typing())render()});
     },()=>{});
   }
   if(room)room.onPeers(ch=>{
     const n=new Set(ch.peers.filter(p=>p.kind==='viewer').map(p=>p.by||p.peer)).size;
-    online=new Set(ch.peers.filter(p=>p.by&&p.presence&&p.presence.acc===1).map(p=>p.by));
+    online=new Set(ch.peers.filter(p=>p.by&&p.presence&&p.presence.acc===1&&p.presence.pid).map(p=>p.by+'~'+p.presence.pid));
     if(isOwner&&route==='admin'&&!typing())render();
     else if(n!==hereN&&(route==='garden'||route==='common')&&!typing()){hereN=n;render()}
     hereN=n;
@@ -892,10 +941,10 @@ const NOP=['Ничего страшного. Каждая попытка тож�
 const WISHES=['Хорошего дня всем в саду!','Приятно видеть, как растёт наш сад.','Вы не одни, мы занимаемся вместе.','Берегите себя и заходите завтра.'];
 
 /* ---------- play framework ---------- */
-function openGame(id){abandon();G={g:GAMES[id],lvl:Math.min(4,S.lv[id]!=null?S.lv[id]:0),active:false,run:0};route='play';render();window.scrollTo(0,0)}
+function openGame(id){abandon();G={g:GAMES[id],lvl:Math.min(4,S.lv[id]!=null?S.lv[id]:0),active:false,run:0,trial:false};route='play';bump('open');render();window.scrollTo(0,0)}
 function startGame(){
   G.active=true;G.t0=Date.now();G.run++;const my=G.run,g=G.g;
-  if(speaking)say('');S.cur={g:g.id,l:G.lvl,at:G.t0};save();
+  if(speaking)say('');if(G.trial)bump('trial');else{S.cur={g:g.id,l:G.lvl,at:G.t0};bump('start')}save();
   $('#main').innerHTML=`<section class="card"><div class="row between"><h2>${esc(g.name)}</h2><button data-act="quit">Выйти из игры</button></div><p class="mut">Уровень ${G.lvl+1} из 5</p><div id="box" class="list"></div></section>`;
   const ctx={lvl:G.lvl,box:$('#box'),later:(f,ms)=>setTimeout(()=>{if(G&&G.run===my&&G.active)f()},ms),done:r=>{if(G&&G.run===my&&G.active){if(ctx.stop)ctx.stop();finish(r)}}};
   G.ctx=ctx;g.run(ctx);
@@ -904,19 +953,27 @@ function markDay(){if(S.lastDay!==DAY()){S.days++;S.lastDay=DAY()}}
 function finish(r){
   G.active=false;document.onkeydown=null;
   const d=Math.max(1,Math.round((Date.now()-G.t0)/1000)),ok=r.score>=60,id=G.g.id;
-  S.hist.push({g:id,l:G.lvl,at:G.t0,d,s:r.score,ok});if(S.hist.length>200)S.hist=S.hist.slice(-200);
-  S.sec+=d;S.cur=null;markDay();
-  if(ok){S.apples++;S.lv[id]=Math.max(S.lv[id]||0,G.lvl);newApple=true}
-  save();G.res=Object.assign({d,ok,msg:(ok?OKP:NOP)[rnd(ok?OKP.length:NOP.length)]},r);render();
+  if(G.trial){G.res=Object.assign({d,ok,trial:1,msg:'Пробный раунд завершён. Теперь можно сыграть по-настоящему.'},r);sfx('tap');render();return}
+  S.hist.push({g:id,l:G.lvl,at:G.t0,d,s:r.score,ok});if(S.hist.length>150)S.hist=S.hist.slice(-150);
+  S.sec+=d;S.cur=null;markDay();bump('fin');
+  if(ok){S.apples++;S.lv[id]=Math.max(S.lv[id]||0,G.lvl);newApple=true;bump('ok')}
+  save();sfx(ok?'ok':'bad');G.res=Object.assign({d,ok,msg:(ok?OKP:NOP)[rnd(ok?OKP.length:NOP.length)]},r);render();
 }
 function abandon(){
   if(G&&G.active){G.active=false;document.onkeydown=null;if(G.ctx&&G.ctx.stop)G.ctx.stop();
-    S.hist.push({g:G.g.id,l:G.lvl,at:G.t0,d:Math.round((Date.now()-G.t0)/1000),s:null,ok:false});S.cur=null;save()}
+    if(!G.trial){S.hist.push({g:G.g.id,l:G.lvl,at:G.t0,d:Math.round((Date.now()-G.t0)/1000),s:null,ok:false});if(S.hist.length>150)S.hist=S.hist.slice(-150);S.cur=null;bump('quit');save()}}
   G=null;
+}
+function vBreath(){
+  return `<section class="card" style="align-items:center;text-align:center"><h2>Минутка спокойного дыхания</h2><div class="breath"><span id="btxt">Вдох</span></div><p id="bleft" class="mut">Осталось 60 с</p><p class="small mut">Вдох четыре секунды, выдох шесть секунд. Дышите спокойно, как вам удобно.</p><button data-act="home">Закончить</button></section>`;
 }
 function vPlay(){
   const g=G.g;
   if(G.res){const r=G.res;
+    if(r.trial)return `<section class="card"><h2>Пробный раунд</h2><p>${esc(r.msg)}</p><p class="mut">Результат не сохраняется, на дерево он не влияет.</p>
+    <div class="tiles"><div class="tile"><b>${r.score}%</b><span>результат</span></div><div class="tile"><b>${dur(r.d)}</b><span>время</span></div><div class="tile"><b>${r.err}</b><span>ошибок</span></div></div>
+    ${r.explain?`<p class="note">${esc(r.explain)}</p>`:''}
+    <div class="row"><button class="pri" data-act="real">Играть по-настоящему</button><button data-act="again">Ещё пробный раунд</button><button data-act="home">Вернуться в сад</button></div></section>`;
     return `<section class="card"><h2>${r.ok?'Яблоко созрело!':'Раунд завершён'}</h2>
     ${scene(treeSVG(S,{fruits:fruitsOf(S),fresh:true}))}<p>${esc(r.msg)}</p><p class="mut">${r.ok?'На вашем дереве выросло новое спелое яблоко.':'Яблоко пока зелёное. Можно попробовать ещё раз или выбрать уровень проще.'}</p>
     <div class="tiles"><div class="tile"><b>${r.score}%</b><span>результат</span></div><div class="tile"><b>${dur(r.d)}</b><span>время</span></div><div class="tile"><b>${r.err}</b><span>ошибок</span></div><div class="tile"><b>${G.lvl+1} из 5</b><span>уровень</span></div></div>
@@ -924,7 +981,94 @@ function vPlay(){
     <div class="row"><button class="pri" data-act="again">Повторить</button>${r.ok&&G.lvl<4?'<button data-act="nextlvl">Следующий уровень</button>':''}${r.explain?'<button data-act="explain">Показать объяснение</button>':''}<button data-act="home">Вернуться в сад</button>${sayBtn(r.msg)}</div></section>`}
   return `<section class="card"><div class="row">${illo(g.id,1)}<div style="flex:1 1 160px"><p class="mut small">${CATS[g.cat]}</p><h2>${esc(g.name)}</h2><p class="small mut">Тренирует ${TRAINS[g.id]}</p></div></div><p>${esc(g.how)}</p>
    <div><p class="small mut">Уровень сложности</p><div class="chips">${range(5).map(i=>`<button data-act="lvl" data-l="${i}" aria-pressed="${i===G.lvl}">${i+1}</button>`).join('')}</div></div>
-   <div class="row"><button class="pri" data-act="start">Начать</button>${sayBtn(g.name+'. '+g.how)}<button data-act="home">Вернуться в сад</button></div><p class="small mut">Если выйти из игры, не доиграв, на дереве останется надкусанное яблоко.</p></section>`;
+   <div class="row"><button class="pri" data-act="start">Начать</button><button data-act="trial">Пробный раунд</button>${sayBtn(g.name+'. '+g.how)}<button data-act="home">Вернуться в сад</button></div><p class="small mut">Пробный раунд не сохраняется и на дерево не влияет. Если выйти из настоящей игры, не доиграв, на дереве останется надкусанное яблоко.</p></section>`;
+}
+
+/* ---------- sound ---------- */
+let actx=null;
+function sfx(k){
+  if(getUI().mute)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();
+    const n=actx.currentTime;
+    (({ok:[[523,0],[659,.12],[784,.24]],bad:[[247,0],[208,.16]],pop:[[880,0],[1175,.08]],tap:[[1320,0],[1568,.07],[1320,.14]]})[k]||[]).forEach(([f,t])=>{
+      const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,n+t);g.gain.exponentialRampToValueAtTime(.08,n+t+.02);g.gain.exponentialRampToValueAtTime(.0001,n+t+.3);
+      o.connect(g);g.connect(actx.destination);o.start(n+t);o.stop(n+t+.32)});
+  }catch(e){}
+}
+function streak(st){
+  const ds=new Set((Array.isArray(st.hist)?st.hist:[]).filter(h=>h.s!=null).map(h=>dayOf(h.at)));let n=0,t=Date.now();
+  if(!ds.has(dayOf(t)))t-=864e5;while(ds.has(dayOf(t))){n++;t-=864e5}return n;
+}
+const PROV=['Век живи, век учись.','Терпение и труд всё перетрут.','Повторенье — мать ученья.','Тише едешь — дальше будешь.','Ученье — свет.','Капля камень точит.','Дорогу осилит идущий.','Глаза боятся, а руки делают.','Утро вечера мудренее.','Доброе слово и кошке приятно.'];
+
+/* ---------- admin analytics ---------- */
+function hbars(rows,unit=''){
+  const mx=Math.max(1,...rows.map(r=>r[1]));
+  return `<div class="hbars">${rows.map(r=>`<div class="hb" title="${esc(r[0])}: ${r[1]}${unit}"><span>${esc(r[0])}</span><span class="tr"><i style="width:${r[1]?Math.max(2,r[1]/mx*100):0}%"></i></span><b>${r[1]}${unit}${r[2]?` <small>${esc(r[2])}</small>`:''}</b></div>`).join('')}</div>`;
+}
+function vbars(cols,h=110){
+  const mx=Math.max(1,...cols.map(c=>c.parts.reduce((a,b)=>a+b,0)));
+  return `<div class="vbars">${cols.map(c=>{const t=c.parts.reduce((a,b)=>a+b,0);return `<div class="vb" title="${esc(c.tip)}"><small>${t||''}</small><div class="st">${c.parts.map((v,i)=>v?`<i class="s${i+1}" style="height:${Math.max(3,v/mx*h).toFixed(0)}px"></i>`:'').join('')}</div><span>${c.label}</span></div>`}).join('')}</div>`;
+}
+function vStats(){
+  const P=people,now=Date.now(),D=864e5,hs=p=>Array.isArray(p.hist)?p.hist:[];
+  if(!P.length)return '<p class="mut">Пока нет ни одного дерева. Статистика появится после первых занятий.</p>';
+  const H=P.flatMap(p=>hs(p).map(h=>({p,h}))),fin=H.filter(x=>x.h.s!=null),ok=H.filter(x=>x.h.ok),quit=H.filter(x=>x.h.s==null);
+  const pct=(a,b)=>b?Math.round(a/b*100):0,nm=p=>p.nick||'Без имени';
+  const played=n=>P.filter(p=>hs(p).some(h=>now-h.at<n*D)).length,seenToday=P.filter(p=>p.seen&&dayOf(p.seen)===DAY()).length;
+  const playedToday=P.filter(p=>hs(p).some(h=>dayOf(h.at)===DAY())).length;
+  const tot=k=>P.reduce((a,p)=>a+((p.tot&&+p.tot[k])||0),0);
+  const tile=(v,l)=>`<div class="tile"><b>${v}</b><span>${l}</span></div>`;
+  const dayCols=f=>range(14).map(i=>{const t=now-(13-i)*D,k=dayOf(t),xs=H.filter(x=>dayOf(x.h.at)===k);return f(t,xs)});
+  const rounds=dayCols((t,xs)=>{const a=xs.filter(x=>x.h.ok).length,g=xs.filter(x=>x.h.s!=null&&!x.h.ok).length,q=xs.filter(x=>x.h.s==null).length;
+    return{label:new Date(t).getDate(),parts:[a,g,q],tip:`${dm(t)}: спелых ${a}, зелёных ${g}, надкусанных ${q}`}});
+  const players=dayCols((t,xs)=>{const n=new Set(xs.map(x=>x.p.id)).size;return{label:new Date(t).getDate(),parts:[n],tip:`${dm(t)}: играли ${n} чел.`}});
+  const hours=range(24).map(h=>{const n=H.filter(x=>new Date(x.h.at).getHours()===h).length;return{label:h%6===0?h:'&nbsp;',parts:[n],tip:`${h}:00–${h}:59: раундов ${n}`}});
+  const wd=['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'].map((n,i)=>[n,H.filter(x=>(new Date(x.h.at).getDay()+6)%7===i).length]);
+  const gm=ORDER.map(id=>{const xs=H.filter(x=>x.h.g===id),f=xs.filter(x=>x.h.s!=null);
+    return{id,n:xs.length,fin:f.length,ok:xs.filter(x=>x.h.ok).length,avg:f.length?Math.round(f.reduce((a,x)=>a+x.h.s,0)/f.length):0,t:f.length?Math.round(f.reduce((a,x)=>a+(x.h.d||0),0)/f.length):0,u:new Set(xs.map(x=>x.p.id)).size}}).filter(g=>g.n).sort((a,b)=>b.n-a.n);
+  const dropped=gm.filter(g=>g.n>=3).map(g=>[gname(g.id),pct(g.n-g.fin,g.n),`${g.n-g.fin} из ${g.n}`]).filter(r=>r[1]).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const cats=Object.entries(CATS).map(([k,n])=>[n,H.filter(x=>GAMES[x.h.g]&&GAMES[x.h.g].cat===k).length]);
+  const lv=range(5).map(i=>['Уровень '+(i+1),H.filter(x=>x.h.l===i).length]);
+  const dd=P.map(p=>new Set(hs(p).filter(h=>h.s!=null).map(h=>dayOf(h.at))).size),ret=n=>dd.filter(v=>v>=n).length;
+  const gap=p=>Math.floor((now-(+p.seen||0))/D);
+  const sleep=P.filter(p=>gap(p)>=7).sort((a,b)=>gap(b)-gap(a)),risk=P.filter(p=>gap(p)>=3&&gap(p)<7),never=P.filter(p=>!hs(p).length);
+  const top7=P.map(p=>[nm(p),hs(p).filter(h=>h.s!=null&&now-h.at<7*D).length]).filter(r=>r[1]).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const strk=P.map(p=>[nm(p),streak(p)]).filter(r=>r[1]).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const avgT=fin.length?Math.round(fin.reduce((a,x)=>a+(x.h.d||0),0)/fin.length):0,w7=H.filter(x=>now-x.h.at<7*D).length,p7=played(7);
+  const newcomers=P.filter(p=>p.born&&now-p.born<7*D).length,st=P.map(p=>pstat(p));
+  const list=(arr,f)=>arr.length?`<div class="list">${arr.slice(0,12).map(p=>`<div class="item"><div><b>${esc(nm(p))}</b></div><span class="pill">${f(p)}</span></div>`).join('')}</div>`:'<p class="mut">Таких участников нет.</p>';
+  return `<h3>Пользуются или нет</h3>
+  <p>${p7} из ${P.length} участников играли за последние 7 дней (${pct(p7,P.length)}%). Не заходили неделю и дольше: ${sleep.length}. Посадили дерево и ни разу не сыграли: ${never.length}.</p>
+  <div class="tiles">${tile(P.length,'деревьев всего')}${tile(st.filter(x=>x.on).length,'онлайн сейчас')}${tile(st.filter(x=>x.playing).length,'играют сейчас')}${tile(seenToday,'заходили сегодня')}${tile(playedToday,'играли сегодня')}${tile(p7,'играли за 7 дней')}${tile(played(30),'играли за 30 дней')}${tile(newcomers,'новых за 7 дней')}</div>
+  <h3>Раунды по дням, 14 дней</h3>${vbars(rounds)}
+  <p class="small mut"><i class="sw s1"></i>спелые: доиграно успешно<i class="sw s2"></i>зелёные: доиграно ниже 60%<i class="sw s3"></i>надкусанные: брошено</p>
+  <h3>Сколько людей играло по дням</h3>${vbars(players,70)}
+  <h3>Воронка</h3>${hbars([['Открыли карточку игры',Math.max(tot('open'),H.length)],['Начали раунд',H.length],['Доиграли до конца',fin.length],['Получили спелое яблоко',ok.length]])}
+  <p class="small mut">Открытия карточек считаются с этого обновления. История хранит последние 150 раундов каждого участника.</p>
+  <h3>Качество занятий</h3>
+  <div class="tiles">${tile(pct(fin.length,H.length)+'%','раундов доиграно')}${tile(pct(quit.length,H.length)+'%','раундов брошено')}${tile(pct(ok.length,fin.length)+'%','успешных из доигранных')}${tile(dur(avgT),'средний раунд')}${tile(p7?(w7/p7).toFixed(1):'0','раундов на игрока за неделю')}${tile((dd.reduce((a,b)=>a+b,0)/P.length).toFixed(1),'дней практики в среднем')}</div>
+  <h3>В какое время играют (часы суток)</h3>${vbars(hours,70)}
+  <h3>Дни недели</h3>${hbars(wd)}
+  <h3>Упражнения</h3>
+  ${gm.length?`<div class="scroll"><table><thead><tr><th>Упражнение</th><th>Запусков</th><th>Доиграно</th><th>Успешно</th><th>Средний результат</th><th>Среднее время</th><th>Игроков</th></tr></thead><tbody>${gm.map(g=>`<tr><td>${esc(gname(g.id))}</td><td>${g.n}</td><td>${pct(g.fin,g.n)}%</td><td>${pct(g.ok,g.n)}%</td><td>${g.fin?g.avg+'%':'—'}</td><td>${g.fin?dur(g.t):'—'}</td><td>${g.u}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">Раундов пока не было.</p>'}
+  <p class="small mut">Ни разу не запускали: ${ORDER.filter(id=>!gm.some(g=>g.id===id)).map(gname).join(', ')||'таких игр нет'}.</p>
+  <h3>Чаще всего бросают</h3>${dropped.length?hbars(dropped,'%'):'<p class="mut">Пока недостаточно данных: нужно хотя бы три запуска игры.</p>'}
+  <h3>Направления</h3>${hbars(cats)}
+  <h3>Уровни сложности</h3>${hbars(lv)}
+  <h3>Возвращаемость</h3>
+  <div class="tiles">${tile(ret(2),'играли 2 дня и больше')}${tile(ret(3),'играли 3 дня и больше')}${tile(ret(7),'играли 7 дней и больше')}${tile(pct(ret(2),P.length)+'%','вернулись хотя бы раз')}</div>
+  <h3>Самые активные за неделю</h3>${top7.length?hbars(top7,'',''):'<p class="mut">За неделю никто не играл.</p>'}
+  <h3>Серии: дней подряд</h3>${strk.length?hbars(strk):'<p class="mut">Активных серий сейчас нет.</p>'}
+  <h3>Не заходили 7 дней и дольше</h3>${list(sleep,p=>p.seen?gap(p)+' дн.':'нет данных')}
+  <h3>Не заходили от 3 до 6 дней</h3>${list(risk,p=>gap(p)+' дн.')}
+  <h3>Посадили дерево и не играли</h3>${list(never,p=>'визит: '+when(p.seen))}
+  <h3>Устройства и остальное</h3>
+  ${hbars([['Телефон',P.filter(p=>p.dev==='phone').length],['Компьютер или планшет',P.filter(p=>p.dev==='desk').length]])}
+  <div class="tiles">${tile(P.reduce((a,p)=>a+(+p.waters||0),0),'поливов дерева')}${tile(tot('trial'),'пробных раундов')}${tile(tot('breath'),'минуток дыхания')}${tile(words.length,'добрых пожеланий')}${tile(P.reduce((a,p)=>a+(Array.isArray(p.visits)?p.visits.length:0),0),'визитов записано')}</div>
+  <div class="row"><button data-act="csvall">Скопировать всю историю как CSV</button><span id="copied" class="small mut" role="status"></span></div>`;
 }
 
 /* ---------- views ---------- */
@@ -932,12 +1076,13 @@ const MODE_NAMES={account:'Аккаунт: сохраняется в облак�
 const okHist=()=>S.hist.filter(h=>h.ok);
 const doneToday=id=>S.hist.some(h=>h.ok&&h.g===id&&dayOf(h.at)===DAY());
 function todays(){const n=Math.floor(Date.now()/864e5);return Object.values(BYCAT).map(a=>a[n%a.length])}
-function plantForm(){return `<section class="card"><h2>Посадите своё дерево</h2><p>Как подписать дерево? Можно имя или псевдоним.</p>
-  <div class="row"><label for="nick" class="small mut" style="flex-basis:100%">Имя для дерева</label><input type="text" id="nick" maxlength="24" autocomplete="nickname"><button class="pri" data-act="plant">Посадить дерево</button></div>
+function plantForm(more){return `<section class="card"><h2>${more?'Добавить ещё одно имя':'Посадите своё дерево'}</h2><p>${more?'У каждого имени своё дерево и своя история. Удобно, если на одном устройстве занимаются несколько человек.':'Напишите имя или псевдоним и сразу начинайте играть. Регистрация не нужна.'}</p>
+  <div class="row"><label for="nick" class="small mut" style="flex-basis:100%">Имя для дерева</label><input type="text" id="nick" maxlength="24" autocomplete="nickname"><button class="pri" data-act="plant">Посадить дерево</button>${more?'<button data-act="addcancel">Отмена</button>':''}</div>
   <p class="small mut">Режим: ${MODE_NAMES[mode]}. Изменить можно в разделе «Настройки».</p></section>`}
 function vGarden(){
   if(!ready)return `<section class="card"><p>Открываем сад…</p></section>`;
   if(!S.nick&&mode!=='nosave')return (notice?`<p class="note">${esc(notice)}</p>`:'')+plantForm();
+  if(adding&&mode!=='nosave')return plantForm(true);
   const shown=S.hist.slice(-12),tdy=S.hist.filter(h=>h.ok&&dayOf(h.at)===DAY()).length,fresh=newApple;newApple=false;
   const played=S.hist.some(h=>h.s!=null&&dayOf(h.at)===DAY()),watered=S.water===DAY(),rec=todays();
   let info='';
@@ -946,16 +1091,19 @@ function vGarden(){
   return `${notice?`<p class="note">${esc(notice)}</p>`:''}
   ${scene(treeSVG(S,{click:true,fresh,fruits:fruitsOf(S),bird:played}),bub)}
   <div class="row"><button data-act="water" ${watered?'disabled':''}>${watered?'Дерево сегодня полито':'💧 Полить дерево'}</button><span class="small mut">Нажмите на крону, на яблоко или на птицу.</span></div>
-  ${cheer&&cheer.text?`<section class="card"><h2>Вам передали добрые слова</h2><p>Роман пишет: «${esc(String(cheer.text).slice(0,140))}»</p><div class="row"><button class="pri" data-act="thanks">Спасибо!</button>${sayBtn(String(cheer.text).slice(0,140))}</div></section>`:''}
+  ${cheer&&cheer.text&&(!cheer.pid||cheer.pid===ACC.active)?`<section class="card"><h2>Вам передали добрые слова</h2><p>Роман пишет: «${esc(String(cheer.text).slice(0,140))}»</p><div class="row"><button class="pri" data-act="thanks">Спасибо!</button>${sayBtn(String(cheer.text).slice(0,140))}</div></section>`:''}
   <section class="card"><div class="row between"><h2>${HELLO[tod()]}, ${esc(S.nick||'гость')}!</h2><span class="pill">${MODE_NAMES[mode]}</span></div>
+    ${mode!=='nosave'?`<div class="chips" role="group" aria-label="Кто играет">${Object.entries(ACC.profiles).map(([k,q])=>`<button data-act="who" data-p="${k}" aria-pressed="${k===ACC.active}">${esc(q.nick)}</button>`).join('')}${Object.keys(ACC.profiles).length<8?'<button data-act="addname">+ Добавить имя</button>':''}</div>`:''}
     ${hereN>1?`<p>Вы не одни: вместе с вами в саду сейчас ещё ${hereN-1} чел.</p>`:''}
     ${fresh?'<p>Сегодня в вашем саду выросло ещё одно яблоко!</p>':''}${info}
-    <div class="tiles"><div class="tile"><b>${tdy}</b><span>упражнений сегодня</span></div><div class="tile"><b>${S.apples}</b><span>спелых яблок</span></div><div class="tile"><b>${S.flowers}</b><span>цветов за посещения</span></div><div class="tile"><b>${S.days}</b><span>дней с практикой</span></div></div>
+    <div class="tiles"><div class="tile"><b>${tdy}</b><span>упражнений сегодня</span></div><div class="tile"><b>${S.apples}</b><span>спелых яблок</span></div><div class="tile"><b>${S.flowers}</b><span>цветов за посещения</span></div><div class="tile"><b>${S.days}</b><span>дней с практикой</span></div><div class="tile"><b>${streak(S)}</b><span>дней подряд</span></div></div>
+    <div><p class="small mut">Цель дня: 3 упражнения. Сделано ${Math.min(tdy,3)} из 3.</p><div class="bar"><i style="width:${Math.min(100,tdy/3*100).toFixed(0)}%"></i></div></div>
     <p class="small mut">На ветках последние 12 плодов. Красное яблоко: раунд пройден. Зелёное: результат ниже 60%. Надкусанное: игра не доиграна. Птица прилетает в дни занятий, бабочки за полив.</p></section>
   <section class="card"><h2>Моя тренировка сегодня</h2><p class="mut">Четыре коротких упражнения: память, внимание, логика и пространство.</p>
     <div class="list">${rec.map(id=>{const g=GAMES[id];return `<div class="item">${illo(id)}<div><b>${esc(g.name)}</b><br><span class="small mut">${CATS[g.cat]}${doneToday(id)?' · выполнено сегодня ✓':''}</span></div><button class="${doneToday(id)?'':'pri'}" data-act="open" data-g="${id}">${doneToday(id)?'Ещё раз':'Начать'}</button></div>`}).join('')}</div></section>
   <section class="card"><h2>Мои две недели</h2>${calendar()}<p class="small mut">Зелёным отмечены дни с занятиями. Пропуски ничего не отнимают: дерево просто ждёт вас.</p></section>
-  <section class="card"><h2>Мои награды</h2>${awardsHTML(S)}</section>`;
+  <section class="card"><h2>Мои награды</h2>${awardsHTML(S)}</section>
+  <section class="card"><h2>Минутка покоя</h2><p>Мудрость дня: «${PROV[Math.floor(Date.now()/864e5)%PROV.length]}»</p><div class="row"><button data-act="breath">Минутка спокойного дыхания</button></div></section>`;
 }
 function vGames(){
   const ids=ORDER.filter(id=>catF==='all'||GAMES[id].cat===catF);
@@ -978,15 +1126,16 @@ function vCommon(){
   if(!db)return `<section class="card"><h2>Общий сад</h2><p>Общий сад виден участникам, которые вошли в Claude и открыли эту страницу по приглашению.</p></section>`;
   const q=search.trim().toLowerCase(),list=trees.filter(t=>!q||String(t.nick||'').toLowerCase().includes(q));
   const total=trees.reduce((a,t)=>a+(+t.apples||0),0);
-  const nickOf=id=>{const t=trees.find(x=>x.id===id);return t&&t.nick?t.nick:'Участник сада'};
+  const mk=monKey(),harv=trees.reduce((a,t)=>a+(t.monKey===mk?(+t.mon||0):0),0),goal=[50,100,250,500,1000,2500,5000,10000].find(g=>g>harv)||harv;
   const ws=[...words].filter(w=>typeof w.text==='string'&&w.text.trim()).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,30);
   const canWrite=mode==='account'&&S.nick;
   return `<section class="card"><h2>Общий сад</h2><p>Деревьев: ${trees.length}. Всего выращено яблок: ${total}.${hereN>1?` Сейчас в саду ${hereN} чел.`:''}</p>
+   <div><p class="small mut">Урожай месяца: ${harv} из ${goal} яблок. Его растят все вместе.</p><div class="bar"><i style="width:${Math.min(100,harv/goal*100).toFixed(0)}%"></i></div></div>
    <div class="row"><label for="q" class="small mut">Найти дерево по имени</label><input type="text" id="q" value="${esc(search)}" data-in="search"></div>
-   ${list.length?`<div class="trees">${list.map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'Без имени')}</b><span class="small mut">${+t.apples||0} яблок${t.id===uid?' · это вы':''}</span></div>`).join('')}</div>`:`<p class="mut">${trees.length?'Такого дерева нет.':'В общем саду пока нет деревьев. Первое появится после первой посадки.'}</p>`}
+   ${list.length?`<div class="trees">${list.map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'Без имени')}</b><span class="small mut">${+t.apples||0} яблок${t.id===uid+'~'+ACC.active?' · это вы':''}</span></div>`).join('')}</div>`:`<p class="mut">${trees.length?'Такого дерева нет.':'В общем саду пока нет деревьев. Первое появится после первой посадки.'}</p>`}
    <p class="small mut">Здесь видны только имя дерева, яблоки и цветы. Игры, результаты и время занятий другим участникам не показываются.</p></section>
   <section class="card"><h2>Добрые слова</h2><p class="mut">Оставьте пожелание другим садовникам. У каждого одно пожелание, его можно менять.</p>
-   ${ws.length?`<div class="list">${ws.map(w=>`<div class="word"><p>${esc(w.text.slice(0,140))}<br><span class="small mut">${esc(nickOf(w.id))}${w.id===uid?' · это вы':''}</span></p>${w.id===uid||isOwner?`<button data-act="worddel" data-id="${esc(w.id)}">Убрать</button>`:''}</div>`).join('')}</div>`:'<p class="mut">Пока никто ничего не написал. Ваше пожелание может стать первым.</p>'}
+   ${ws.length?`<div class="list">${ws.map(w=>`<div class="word"><p>${esc(w.text.slice(0,140))}<br><span class="small mut">${esc(typeof w.nick==='string'&&w.nick?w.nick.slice(0,24):'Участник сада')}${w.id===uid?' · это вы':''}</span></p>${w.id===uid||isOwner?`<button data-act="worddel" data-id="${esc(w.id)}">Убрать</button>`:''}</div>`).join('')}</div>`:'<p class="mut">Пока никто ничего не написал. Ваше пожелание может стать первым.</p>'}
    ${canWrite?`<div class="chips">${WISHES.map((w,i)=>`<button data-act="wish" data-i="${i}">${w}</button>`).join('')}</div>
    <div class="row"><label for="word" class="small mut" style="flex-basis:100%">Или напишите своими словами</label><input type="text" id="word" maxlength="140" data-in="word" value="${esc(wordDraft)}"><button class="pri" data-act="wordsend">Оставить пожелание</button></div><p id="wordmsg" class="small mut" role="status">${esc(wordMsg)}</p>`:'<p class="small mut">Писать пожелания могут участники в режиме «Аккаунт», посадившие дерево.</p>'}</section>`;
 }
@@ -995,11 +1144,12 @@ function pstat(p){
   const on=online.has(p.id),playing=on&&!!p.cur;
   return{on,playing,today:ok.filter(x=>dayOf(x.at)===DAY()).length,week:ok.filter(x=>now-x.at<7*864e5).length,month:ok.filter(x=>now-x.at<30*864e5).length,last:h.filter(x=>x.s!=null).at(-1),h};
 }
-const pname=p=>esc(p.nick||'Без имени')+(names[p.id]&&names[p.id].name?` <span class="mut small">(${esc(names[p.id].name)})</span>`:'');
+const pname=p=>esc(p.nick||'Без имени')+(names[p.uid]&&names[p.uid].name?` <span class="mut small">(${esc(names[p.uid].name)})</span>`:'');
 function adminDetail(p,s){
   const c=p.cur,id=esc(p.id);
   return `<div class="card" style="background:var(--bg)"><h3>${pname(p)} <span class="pill ${s.playing?'play':s.on?'on':''}">${s.playing?'играет':s.on?'онлайн':'не в сети'}</span></h3>
-  ${scene(treeSVG(p,{fruits:fruitsOf(p),cur:!!c}))}
+  ${scene(treeSVG(p,{fruits:fruitsOf(p),cur:!!c,click:true}))}
+  ${(()=>{const h=(Array.isArray(p.hist)?p.hist:[]).slice(-12)[appleSel];return appleSel!=null&&h?`<p class="note"><b>${esc(gname(h.g))}</b> · ${when(h.at)} · уровень ${h.l+1} · ${h.s==null?'не доиграно, яблоко надкусано':`${dur(h.d)} · результат ${h.s}%${h.ok?' · спелое яблоко':' · зелёное яблоко'}`}</p>`:'<p class="small mut">Нажмите на яблоко: увидите, какая это была игра, когда и с каким результатом.</p>'})()}
   <p>${c?(s.on?'Играет: ':'Начато и не завершено: ')+`«${esc(gname(c.g))}», уровень ${c.l+1} из 5, начало: ${when(c.at)}`:'Сейчас не играет.'}</p>
   <div class="tiles"><div class="tile"><b>${s.today}</b><span>сегодня</span></div><div class="tile"><b>${s.week}</b><span>за неделю</span></div><div class="tile"><b>${s.month}</b><span>за месяц</span></div><div class="tile"><b>${+p.apples||0}</b><span>спелых яблок</span></div><div class="tile"><b>${+p.days||0}</b><span>дней с практикой</span></div><div class="tile"><b>${Math.round((+p.sec||0)/60)} мин</b><span>в упражнениях</span></div></div>
   <p>Последний результат: ${s.last?`${s.last.s}% в «${esc(gname(s.last.g))}»`:'пока нет'}. Последний визит: ${when(p.seen)}.${p.hidden?' Дерево скрыто из общего сада.':''}</p>
@@ -1017,7 +1167,7 @@ function vAdmin(){
   if(!isOwner)return `<section class="card"><h2>Панель администратора</h2><p>Этот раздел открыт только владельцу сада.</p></section>`;
   const st=people.map(p=>[p,pstat(p)]);
   const tiles=`<div class="tiles"><div class="tile"><b>${people.length}</b><span>участников</span></div><div class="tile"><b>${st.filter(x=>x[1].on).length}</b><span>онлайн сейчас</span></div><div class="tile"><b>${st.filter(x=>x[1].playing).length}</b><span>играют сейчас</span></div><div class="tile"><b>${st.reduce((a,x)=>a+x[1].today,0)}</b><span>яблок за сегодня</span></div></div>`;
-  const tabs=`<div class="chips">${[['live','Живой сад'],['list','Участники'],['hist','История занятий']].map(t=>`<button data-act="atab" data-t="${t[0]}" aria-pressed="${adminTab===t[0]}">${t[1]}</button>`).join('')}</div>`;
+  const tabs=`<div class="chips">${[['live','Живой сад'],['list','Участники'],['hist','История занятий'],['max','Максимальная статистика']].map(t=>`<button data-act="atab" data-t="${t[0]}" aria-pressed="${adminTab===t[0]}">${t[1]}</button>`).join('')}</div>`;
   let body='';
   if(!people.length)body=`<p class="mut">Пока никто не посадил дерево в режиме «Аккаунт». Участники появятся здесь сразу после посадки.</p>`;
   else if(adminTab==='live'){
@@ -1025,6 +1175,7 @@ function vAdmin(){
     const f=st.find(x=>x[0].id===sel);
     if(f){const [p,s]=f,c=p.cur;
       body+=adminDetail(p,s)}
+  }else if(adminTab==='max'){body=vStats();
   }else if(adminTab==='list'){
     body=`<div class="scroll"><table><thead><tr><th>Участник</th><th>Статус</th><th>Сегодня</th><th>Неделя</th><th>Месяц</th><th>Яблок</th><th>Последний визит</th></tr></thead><tbody>${st.map(([p,s])=>`<tr><td>${pname(p)}</td><td>${s.playing?'играет: '+esc(gname(p.cur.g)):s.on?'онлайн':'не в сети'}</td><td>${s.today}</td><td>${s.week}</td><td>${s.month}</td><td>${+p.apples||0}</td><td>${when(p.seen)}</td></tr>`).join('')}</tbody></table></div>
     <div class="row"><button data-act="csv">Скопировать таблицу как CSV</button><span id="copied" class="small mut" role="status"></span></div>`;
@@ -1047,17 +1198,18 @@ function vPrefs(){
     <label class="radio"><input type="checkbox" id="hidden" data-in="hidden" ${S.hidden?'checked':''}><span><b>Скрыть дерево из общего сада</b><br><span class="small mut">Дерево останется в вашем саду и в панели администратора.</span></span></label></section>
   <section class="card"><h2>Удобство</h2>
     <label class="radio"><input type="checkbox" id="big" data-in="big" ${ui.big?'checked':''}><span><b>Крупный текст</b></span></label>
-    <label class="radio"><input type="checkbox" id="still" data-in="still" ${ui.still?'checked':''}><span><b>Отключить анимацию</b></span></label></section>
-  <section class="card"><h2>Удаление данных</h2><p>Удаляются дерево, история и все результаты в текущем режиме.</p>
+    <label class="radio"><input type="checkbox" id="still" data-in="still" ${ui.still?'checked':''}><span><b>Отключить анимацию</b></span></label>
+    <label class="radio"><input type="checkbox" id="mute" data-in="mute" ${ui.mute?'checked':''}><span><b>Выключить звуки</b></span></label></section>
+  <section class="card"><h2>Удаление данных</h2><p>Удаляются дерево и история имени, под которым вы сейчас играете. Другие имена остаются.</p>
     <div class="row">${confirmDel==='me'?`<span>Удалить всё без возможности вернуть?</span><button class="danger" data-act="wipeyes">Да, удалить</button><button data-act="delno">Отмена</button>`:`<button class="danger" data-act="wipeask">Удалить мои данные</button>`}</div></section>`;
 }
 const ROUTES={garden:['Мой сад',vGarden],games:['Упражнения',vGames],progress:['Прогресс',vProgress],common:['Общий сад',vCommon],admin:['Панель Ромы',vAdmin],prefs:['Настройки',vPrefs]};
 function render(){
   $('#nav').innerHTML=Object.entries(ROUTES).filter(([k])=>k!=='admin'||isOwner).map(([k,v])=>`<a href="#${k}" ${route===k?'aria-current="page"':''}>${v[0]}</a>`).join('');
-  $('#main').innerHTML=route==='play'&&G?vPlay():(ROUTES[route]||ROUTES.garden)[1]();
+  $('#main').innerHTML=route==='play'&&G?vPlay():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
   if(route!=='garden')notice='';
 }
-function go(){wordMsg='';bubble='';cheerMsg='';if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render()}
+function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render()}
 window.addEventListener('hashchange',go);
 
 /* ---------- actions ---------- */
@@ -1065,11 +1217,25 @@ function copy(text){const s=$('#copied');const p=navigator.clipboard&&navigator.
   p.then(()=>{if(s)s.textContent='Скопировано'}).catch(()=>{if(s)s.textContent='Браузер не разрешил копирование'})}
 const ACT={
   big(){const ui=getUI();ui.big=!ui.big;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui);if(route==='prefs')render()},
-  plant(){const v=$('#nick').value.trim().slice(0,24);if(!v){$('#nick').focus();return}S.nick=v;save();if(room)room.presence({acc:mode==='account'?1:null}).catch(()=>{});render()},
+  plant(){const v=$('#nick').value.trim().slice(0,24);if(!v){$('#nick').focus();return}
+    if(mode==='nosave'){S.nick=v}else{if(Object.keys(ACC.profiles).length>=8)return;const k=newPid(),st=blank();st.nick=v;st.born=Date.now();ACC.profiles[k]=st;useProfile(k)}
+    adding=false;save();pres();sfx('ok');render()},
+  who(e){const k=e.dataset.p;if(!ACC.profiles[k]||k===ACC.active)return;useProfile(k);appleSel=null;bubble='';save();pres();render()},
+  addname(){adding=true;render();const i=$('#nick');if(i)i.focus()},
+  addcancel(){adding=false;render()},
+  trial(){G.trial=true;G.res=null;startGame()},
+  real(){G.trial=false;G.res=null;startGame()},
+  breath(){
+    abandon();route='breath';render();window.scrollTo(0,0);let left=60;clearInterval(breathT);
+    breathT=setInterval(()=>{left--;const t=$('#btxt'),l=$('#bleft');if(!t||route!=='breath'){clearInterval(breathT);return}
+      t.textContent=(60-left)%10<4?'Вдох':'Выдох';l.textContent='Осталось '+left+' с';
+      if(left<=0){clearInterval(breathT);bump('breath');save();t.textContent='Готово';l.textContent='Минутка прошла. Спасибо, что позаботились о себе.'}},1000);
+  },
+  csvall(){copy(['Участник;Дата;Упражнение;Уровень;Секунд;Результат;Статус'].concat(people.flatMap(p=>(Array.isArray(p.hist)?p.hist:[]).map(h=>[String(p.nick||'').replace(/;/g,','),new Date(h.at).toISOString(),gname(h.g),h.l+1,h.d||0,h.s==null?'':h.s,h.s==null?'брошено':h.ok?'спелое':'зелёное'].join(';')))).join('\n'))},
   rename(){const v=$('#nick2').value.trim().slice(0,24);if(!v)return;S.nick=v;save();render()},
   open(e){openGame(e.dataset.g)},
   lvl(e){G.lvl=+e.dataset.l;render()},
-  start(){startGame()},
+  start(){G.trial=false;startGame()},
   again(){G.res=null;startGame()},
   nextlvl(){G.res=null;G.lvl=Math.min(4,G.lvl+1);startGame()},
   explain(){const x=$('#expl');if(x)x.hidden=false},
@@ -1077,18 +1243,26 @@ const ACT={
   home(){G=null;if(location.hash==='#garden'||location.hash==='')go();else location.hash='garden'},
   apple(e){appleSel=+e.dataset.i;render()},
   atab(e){adminTab=e.dataset.t;render()},
-  sel(e){sel=sel===e.dataset.id?null:e.dataset.id;confirmDel=null;cheerMsg='';render()},
+  sel(e){sel=sel===e.dataset.id?null:e.dataset.id;confirmDel=null;cheerMsg='';appleSel=null;render()},
   delask(e){confirmDel=e.dataset.id;render()},
   delno(){confirmDel=null;render()},
-  async delyes(e){const id=e.dataset.id;confirmDel=null;sel=null;try{await db.doc('activity/'+id).delete();await db.doc('trees/'+id).delete()}catch(x){}render()},
+  async delyes(e){const [u,k]=e.dataset.id.split('~');confirmDel=null;sel=null;
+    try{const a=db.doc('activity/'+u),sn=await a.get(),x=sn.exists?clone(sn.data()):null;
+      if(x&&x.profiles&&k){delete x.profiles[k];if(Object.keys(x.profiles).length)await a.set(x);else await a.delete()}else await a.delete();
+      const t=db.doc('trees/'+u),ts=await t.get(),y=ts.exists?clone(ts.data()):null;
+      if(y&&y.list&&k){delete y.list[k];if(Object.keys(y.list).length)await t.set(y);else await t.delete()}else await t.delete();
+    }catch(x){}render()},
   wipeask(){confirmDel='me';render()},
   async wipeyes(){confirmDel=null;
-    if(mode==='account'){try{await db.doc('activity/'+uid).delete();await db.doc('trees/'+uid).delete()}catch(x){}}
-    if(mode==='device')lsSet('ng_state',null);
-    S=blank();housekeeping();lastTree='';if(room)room.presence({acc:null}).catch(()=>{});location.hash='garden';go()},
+    if(mode==='nosave'){ACC={profiles:{g:blank()},active:'g'};S=ACC.profiles.g}
+    else{delete ACC.profiles[ACC.active];const ids=Object.keys(ACC.profiles);
+      if(ids.length){useProfile(ids[0]);await save()}
+      else{ACC.active='';S=blank();lastTree='';
+        if(mode==='account'){try{await db.doc('activity/'+uid).delete();await db.doc('trees/'+uid).delete()}catch(x){}}else lsSet('ng_state',null)}}
+    pres();if(location.hash==='#garden')go();else location.hash='garden'},
   wish(e){wordDraft=WISHES[+e.dataset.i];const w=$('#word');if(w){w.value=wordDraft;w.focus()}},
   async wordsend(){const t=($('#word')?$('#word').value:wordDraft).trim().slice(0,140);if(!t){if($('#word'))$('#word').focus();return}
-    try{await db.doc('words/'+uid).set({text:t,at:Date.now()});wordDraft='';wordMsg='Пожелание опубликовано.'}catch(x){wordMsg='Не получилось отправить пожелание. Попробуйте ещё раз чуть позже.'}
+    try{await db.doc('words/'+uid).set({text:t,at:Date.now(),nick:S.nick});wordDraft='';wordMsg='Пожелание опубликовано.'}catch(x){wordMsg='Не получилось отправить пожелание. Попробуйте ещё раз чуть позже.'}
     render()},
   async worddel(e){try{await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Не получилось убрать пожелание.'}render()},
   say(e){say(e.dataset.text,e)},
@@ -1099,17 +1273,17 @@ const ACT={
     if(sc&&!still)for(let i=0;i<7;i++){const l=document.createElement('i');l.className='fall';l.style.left=(30+rnd(40))+'%';l.style.setProperty('--dx',(rnd(120)-60)+'px');l.style.animationDelay=(i*90)+'ms';sc.appendChild(l);setTimeout(()=>l.remove(),3000)}
   },
   water(){
-    if(S.water===DAY())return;S.water=DAY();S.waters=(S.waters||0)+1;save();
+    if(S.water===DAY())return;S.water=DAY();S.waters=(S.waters||0)+1;save();sfx('pop');
     const sc=$('.scene'),still=document.documentElement.classList.contains('still');
     if(sc&&!still)for(let i=0;i<16;i++){const d=document.createElement('i');d.className='drop';d.style.left=(22+rnd(56))+'%';d.style.animationDelay=(i*60)+'ms';sc.appendChild(d)}
     bubble='Дерево напоено. Спасибо за заботу!'+(S.waters<=3?' К дереву прилетела бабочка.':'');
     setTimeout(()=>{if(route==='garden')render()},still?0:1500);
   },
-  bird(){bubble=BIRD[rnd(BIRD.length)];render()},
+  bird(){bubble=BIRD[rnd(BIRD.length)];sfx('tap');render()},
   async thanks(){cheer=null;render();try{await db.doc('cheers/'+uid).delete()}catch(x){}},
   cheer(e){const i=$('#cheer');if(i){i.value=CHEERS[+e.dataset.i];i.focus()}},
   async cheersend(e){const i=$('#cheer'),t=i?i.value.trim().slice(0,140):'';if(!t){if(i)i.focus();return}
-    try{await db.doc('cheers/'+e.dataset.id).set({text:t,at:Date.now()});cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
+    try{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''});cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
     render()},
   copymine(){copy(JSON.stringify({nick:S.nick,apples:S.apples,flowers:S.flowers,days:S.days,history:S.hist.map(h=>({game:gname(h.g),level:h.l+1,date:new Date(h.at).toISOString(),seconds:h.d,score:h.s}))},null,1))},
   csv(){copy(['Участник;Сегодня;Неделя;Месяц;Яблок;Последний визит'].concat(people.map(p=>{const s=pstat(p);return[String(p.nick||'').replace(/;/g,','),s.today,s.week,s.month,+p.apples||0,p.seen?new Date(p.seen).toISOString():''].join(';')})).join('\n'))}
@@ -1123,7 +1297,7 @@ document.addEventListener('change',async e=>{const k=e.target.dataset.in;if(!k||
   if(k==='mode'){await setMode(e.target.value);render()}
   if(k==='style'){S.style=+e.target.value;save()}
   if(k==='hidden'){S.hidden=e.target.checked;save()}
-  if(k==='big'||k==='still'){const ui=getUI();ui[k]=e.target.checked;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui)}
+  if(k==='big'||k==='still'||k==='mute'){const ui=getUI();ui[k]=e.target.checked;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui)}
 });
 const h0=location.hash.slice(1);route=ROUTES[h0]?h0:'garden';render();
 init().catch(()=>{ready=true;render()});
