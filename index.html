@@ -217,9 +217,9 @@ h3{margin-top:6px}
 </defs></svg>
 <div class="wrap">
   <header class="top">
-    <div class="row between">
-      <div><h1>НейроСад</h1><p class="mut small">Маленькие шаги. Каждый день.</p></div>
-      <button id="aplus" data-act="big" aria-pressed="false" aria-label="Крупный текст">A+</button>
+    <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
+      <div style="min-width:0"><h1>НейроСад</h1><p class="mut small">Маленькие шаги. Каждый день.</p></div>
+      <div class="row" style="flex:none;flex-wrap:nowrap"><span class="pill" id="ver" title="Номер версии сайта">версия 2.9</span><button id="aplus" data-act="big" aria-pressed="false" aria-label="Крупный текст">A+</button></div>
     </div>
   </header>
   <nav id="nav" aria-label="Разделы"></nav>
@@ -267,7 +267,59 @@ let words=[], wordDraft='', hereN=0, wordMsg='';
 let tts=null, ttsOff=false, speaking=false, bubble='', cheer=null, cheerMsg='', catF='all';
 const typing=()=>document.activeElement&&['word','q','cheer','apass'].includes(document.activeElement.id);
 
-let ACC={profiles:{},active:''}, adding=false, breathT=null;
+let ACC={profiles:{},active:''}, adding=false, breathT=null, REV={};
+const num=(v,d=0)=>typeof v==='number'&&isFinite(v)?v:d;
+const int=(v,lo,hi)=>Math.min(hi,Math.max(lo,Math.floor(num(v))));
+function cleanState(o){
+  const st=blank();if(!o||typeof o!=='object')return st;
+  st.nick=typeof o.nick==='string'?o.nick.slice(0,24):'';
+  st.style=int(o.style,0,3);st.hidden=o.hidden===true;
+  ['apples','flowers','days','sec','seen','waters','born'].forEach(k=>st[k]=int(o[k],0,1e15));
+  ['lastVisit','lastDay','water'].forEach(k=>st[k]=typeof o[k]==='string'?o[k].slice(0,10):'');
+  st.dev=o.dev==='phone'||o.dev==='desk'?o.dev:'';
+  const ent=h=>h&&typeof h==='object'&&typeof h.g==='string'&&typeof h.at==='number'&&isFinite(h.at)
+    ?{g:h.g.slice(0,20),l:int(h.l,0,4),at:h.at,d:int(h.d,0,86400),s:typeof h.s==='number'&&isFinite(h.s)?int(Math.round(h.s),0,100):null,ok:h.ok===true&&typeof h.s==='number'}:null;
+  st.hist=(Array.isArray(o.hist)?o.hist:[]).map(ent).filter(Boolean).slice(-150);
+  const c=o.cur;st.cur=c&&typeof c==='object'&&typeof c.g==='string'&&typeof c.at==='number'&&isFinite(c.at)?{g:c.g.slice(0,20),l:int(c.l,0,4),at:c.at}:null;
+  if(o.lv&&typeof o.lv==='object')Object.keys(o.lv).slice(0,60).forEach(k=>{if(typeof o.lv[k]==='number'&&k!=='__proto__')st.lv[k.slice(0,20)]=int(o.lv[k],0,4)});
+  if(o.tot&&typeof o.tot==='object')Object.keys(o.tot).slice(0,30).forEach(k=>{if(typeof o.tot[k]==='number'&&k!=='__proto__')st.tot[k.slice(0,20)]=int(o.tot[k],0,1e9)});
+  st.visits=(Array.isArray(o.visits)?o.visits:[]).filter(v=>typeof v==='number'&&isFinite(v)).slice(-60);
+  return st;
+}
+const cleanTree=(t,id,u)=>{t=t&&typeof t==='object'?t:{};return{id:String(id),uid:u,nick:typeof t.nick==='string'?t.nick.slice(0,24):'',style:int(t.style,0,3),apples:int(t.apples,0,1e6),flowers:int(t.flowers,0,1e6),waters:int(t.waters,0,1e6),mon:int(t.mon,0,1e6),monKey:typeof t.monKey==='string'?t.monKey.slice(0,7):''}};
+/* Two tabs saved the same name: keep every round from both and the larger counters. */
+function mergeState(loc,remRaw){
+  const rem=cleanState(remRaw),m=cleanState(loc),key=h=>h.at+'|'+h.g,seen=new Set(rem.hist.map(key)),extra=m.hist.filter(h=>!seen.has(key(h)));
+  m.hist=[...rem.hist,...extra].sort((a,b)=>a.at-b.at).slice(-150);
+  m.apples=rem.apples+extra.filter(h=>h.ok).length;m.sec=rem.sec+extra.reduce((a,h)=>a+h.d,0);
+  ['flowers','days','waters','seen'].forEach(k=>m[k]=Math.max(m[k],rem[k]));
+  Object.keys(rem.lv).forEach(k=>m.lv[k]=Math.max(m.lv[k]==null?0:m.lv[k],rem.lv[k]));
+  Object.keys(rem.tot).forEach(k=>m.tot[k]=Math.max(m.tot[k]||0,rem.tot[k]));
+  m.born=rem.born||m.born;m.visits=[...new Set([...rem.visits,...m.visits])].sort((a,b)=>a-b).slice(-60);
+  return m;
+}
+async function sbSave(k){
+  const pay=()=>{const q=ACC.profiles[k];if(!q||!q.nick)return null;const st=clone(q);st._mon=monApples(q);st._monKey=monKey();return st};
+  let r=null;
+  for(let i=0;i<3;i++){
+    const st=pay();if(!st)return;
+    r=await rpc('ng_save',{p_key:KEY,p_pid:k,p_state:st,p_rev:REV[k]==null?null:REV[k]});
+    if(!(r&&r.conflict))break;
+    REV[k]=r.rev;if(ACC.profiles[k])Object.assign(ACC.profiles[k],mergeState(ACC.profiles[k],r.state));
+  }
+  if(r&&r.gone){
+    const nm=ACC.profiles[k]?ACC.profiles[k].nick:'';delete ACC.profiles[k];delete REV[k];
+    if(ACC.active===k){const ids=Object.keys(ACC.profiles);if(ids.length)useProfile(ids[0]);else{ACC.active='';S=blank()}}
+    notice=`Имя «${nm}» было удалено из сада, его дерево больше не сохраняется.`;
+    if(!(route==='play'&&G&&G.active))render();return;
+  }
+  if(r&&r.conflict)throw{code:'conflict'};
+  if(r&&r.rev!=null)REV[k]=r.rev;applyMeta(r,k);
+}
+async function arpc(fn,args){
+  const r=await rpc(fn,Object.assign({p_pass:adminPass},args||{}));
+  if(!r||r.ok!==true)throw{code:(r&&r.error)||'error'};return r;
+}
 const clone=o=>JSON.parse(JSON.stringify(o));
 const newPid=()=>'p'+Date.now().toString(36)+rnd(1296).toString(36);
 const bump=k=>{if(!S.tot||typeof S.tot!=='object')S.tot={};S.tot[k]=(S.tot[k]||0)+1};
@@ -278,7 +330,7 @@ function normalize(o){
   let pr={};
   if(o&&o.profiles&&typeof o.profiles==='object')pr=o.profiles;else if(o&&o.nick)pr={p1:o};
   const out={profiles:{},active:(o&&o.active)||''};
-  Object.keys(pr).slice(0,8).forEach(k=>{const st=Object.assign(blank(),pr[k]);if(!Array.isArray(st.hist))st.hist=[];if(!st.lv||typeof st.lv!=='object')st.lv={};if(!st.tot||typeof st.tot!=='object')st.tot={};out.profiles[k]=st});
+  Object.keys(pr).filter(k=>/^[A-Za-z0-9_-]{1,40}$/.test(k)).slice(0,8).forEach(k=>{out.profiles[k]=cleanState(pr[k])});
   return out;
 }
 function useProfile(pid){ACC.active=pid;S=ACC.profiles[pid];housekeeping();if(sbOK){lsSet('ng_active',pid);const c=cheerBy[pid];cheer=c?Object.assign({pid},c):null}}
@@ -289,18 +341,18 @@ function applyMeta(r,pid){
   if(pid===ACC.active){cheer=c?Object.assign({pid},c):null;if(ch&&route==='garden'&&!adding)render()}
 }
 function heartbeat(){if(sbOK&&mode==='account'&&S.nick&&!document.hidden){const k=ACC.active;rpc('ng_ping',{p_key:KEY,p_pid:k}).then(r=>applyMeta(r,k)).catch(()=>{})}}
-async function loadCommon(){const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);trees=t||[];words=w||[]}
+async function loadCommon(){const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);trees=(Array.isArray(t)?t:[]).map(x=>cleanTree(x,x&&x.id,x&&x.id));words=(Array.isArray(w)?w:[]).filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id),text:x.text,nick:x.nick,at:num(x.at),mine:x.mine===true}))}
 async function loadAdmin(){
-  const rows=await rpc('ng_admin_list',{p_pass:adminPass})||[];
-  people=rows.map(r=>Object.assign({},r.state,{id:r.id,uid:r.dev,pid:r.pid,seen:r.seen}));
-  online=new Set(rows.filter(r=>r.age<75).map(r=>r.id));isOwner=true;
+  const rows=((await arpc('ng_admin_list')).rows||[]).filter(r=>r&&typeof r==='object');
+  people=rows.map(r=>Object.assign(cleanState(r.state),{id:String(r.id),uid:String(r.dev),pid:String(r.pid),seen:num(r.seen)}));
+  online=new Set(rows.filter(r=>num(r.age,1e9)<75).map(r=>String(r.id)));isOwner=true;
 }
 function sbRoute(){
   if(!sbOK)return;
   if(route==='common')loadCommon().then(()=>{if(route==='common'&&!typing())render()}).catch(()=>{});
   if(route==='admin'&&adminPass)loadAdmin().then(()=>{if(route==='admin'&&!typing())render()}).catch(()=>{});
 }
-const isMine=w=>sbOK?!!w.mine:isMine(w);
+const isMine=w=>sbOK?!!w.mine:w.id===uid;
 const myTreeId=()=>sbOK?MY[ACC.active]:uid+'~'+ACC.active;
 const pres=()=>{if(room)room.presence({acc:mode==='account'&&S.nick?1:null,pid:ACC.active||null}).catch(()=>{})};
 function housekeeping(){
@@ -322,7 +374,7 @@ async function save(){
   while(dirty){
     dirty=false;
     try{
-      if(sbOK){const k=ACC.active,st=clone(S);st._mon=monApples(S);st._monKey=monKey();applyMeta(await rpc('ng_save',{p_key:KEY,p_pid:k,p_state:st}),k)}else{
+      if(sbOK){await sbSave(ACC.active)}else{
       await db.doc('activity/'+uid).set(clone(ACC));
       const list=treeDoc(),t=JSON.stringify(list);
       if(t!==lastTree){
@@ -343,7 +395,7 @@ async function save(){
 async function setMode(m){
   mode=m;lsSet('ng_mode',m);lastTree='';let raw=null;
   if(m==='account'){
-    try{if(sbOK){const rows=await rpc('ng_load',{p_key:KEY})||[];raw={profiles:{},active:lsGet('ng_active')||''};MY={};cheerBy={};rows.forEach(r=>{raw.profiles[r.pid]=r.state;MY[r.pid]=r.id;cheerBy[r.pid]=r.cheer||null})}
+    try{if(sbOK){const rows=await rpc('ng_load',{p_key:KEY})||[];raw={profiles:{},active:lsGet('ng_active')||''};MY={};cheerBy={};REV={};rows.forEach(r=>{raw.profiles[r.pid]=r.state;MY[r.pid]=r.id;REV[r.pid]=r.rev;cheerBy[r.pid]=r.cheer||null})}
       else{const snap=await withTimeout(db.doc('activity/'+uid).get(),10000);raw=snap.exists?clone(snap.data()):null}}
     catch(e){mode='device';notice='Не удалось связаться с хранилищем аккаунта. Пока сад сохраняется на этом устройстве.'}
   }
@@ -373,10 +425,10 @@ async function init(){
   await setMode(m);
   if(db){
     if(uid)db.doc('cheers/'+uid).onSnapshot(sn=>{cheer=sn.exists?sn.data():null;if(route==='garden')render()},()=>{});
-    db.collection('trees').onSnapshot(q=>{trees=q.docs.flatMap(d=>{const x=d.data()||{};return x.list?Object.entries(x.list).map(([k,t])=>Object.assign({},t,{id:d.id+'~'+k,uid:d.id})):[Object.assign({},x,{id:d.id,uid:d.id})]});if(route==='common'&&!typing())render()},()=>{});
+    db.collection('trees').onSnapshot(q=>{trees=q.docs.flatMap(d=>{const x=d.data()||{};return x.list&&typeof x.list==='object'?Object.entries(x.list).slice(0,8).map(([k,t])=>cleanTree(t,d.id+'~'+k,d.id)):[cleanTree(x,d.id,d.id)]});if(route==='common'&&!typing())render()},()=>{});
     db.collection('words').onSnapshot(q=>{words=q.docs.map(d=>Object.assign({id:d.id},d.data()));if(route==='common'&&!typing())render()},()=>{});
     if(isOwner)db.collection('activity').onSnapshot(q=>{
-      people=q.docs.flatMap(d=>{const x=d.data()||{},pr=x.profiles||(x.nick?{p1:x}:{});return Object.entries(pr).map(([k,st])=>Object.assign({},st,{id:d.id+'~'+k,uid:d.id,pid:k}))});
+      people=q.docs.flatMap(d=>{const x=d.data()||{},pr=x.profiles||(x.nick?{p1:x}:{});return Object.entries(pr).slice(0,8).map(([k,st])=>Object.assign(cleanState(st),{id:d.id+'~'+k,uid:d.id,pid:k}))});
       if(route==='admin'&&!typing())render();
       if(user)user.profiles([...new Set(people.map(p=>p.uid))]).then(ps=>{names=ps;if(route==='admin'&&!typing())render()});
     },()=>{});
@@ -938,7 +990,7 @@ const ORDER=Object.values(BYCAT).flat();
 const BIRD=['Чик-чирик! Рада вас видеть в саду.','Прогулка на свежем воздухе тоже хорошая разминка для ума.','Позвоните сегодня близкому человеку: разговор бодрит память.','Попробуйте игру, в которую ещё не играли. Новое всегда полезно.','Вы сегодня уже позанимались. Дерево это чувствует!'];
 const CHEERS=['Вы молодец, так держать!','Рад видеть вас в саду каждый день.','Отличный результат на этой неделе!','Заходите завтра, дерево вас ждёт.'];
 
-const gname=id=>GAMES[id]?GAMES[id].name:id;
+const gname=id=>Object.prototype.hasOwnProperty.call(GAMES,id)?GAMES[id].name:String(id);
 
 /* ---------- illustrations ---------- */
 const TRAINS={leaves:'зрительную память',seq:'память на порядок',gone:'внимательность и память',schulte:'быстрый поиск взглядом',arrow:'сосредоточенность',color:'умение не отвлекаться',series:'логику',water:'планирование на несколько шагов',mirror:'пространственное воображение'};
@@ -1291,7 +1343,7 @@ const ACT={
   delask(e){confirmDel=e.dataset.id;render()},
   delno(){confirmDel=null;render()},
   async delyes(e){const [u,k]=e.dataset.id.split('~');confirmDel=null;sel=null;
-    if(sbOK){try{await rpc('ng_admin_delete',{p_pass:adminPass,p_id:e.dataset.id});await loadAdmin()}catch(x){}render();return}
+    if(sbOK){try{await arpc('ng_admin_delete',{p_id:e.dataset.id});await loadAdmin()}catch(x){}render();return}
     try{const a=db.doc('activity/'+u),sn=await a.get(),x=sn.exists?clone(sn.data()):null;
       if(x&&x.profiles&&k){delete x.profiles[k];if(Object.keys(x.profiles).length)await a.set(x);else await a.delete()}else await a.delete();
       const t=db.doc('trees/'+u),ts=await t.get(),y=ts.exists?clone(ts.data()):null;
@@ -1310,7 +1362,7 @@ const ACT={
   async wordsend(){const t=($('#word')?$('#word').value:wordDraft).trim().slice(0,140);if(!t){if($('#word'))$('#word').focus();return}
     try{if(sbOK){await rpc('ng_word',{p_key:KEY,p_nick:S.nick,p_text:t});await loadCommon()}else await db.doc('words/'+uid).set({text:t,at:Date.now(),nick:S.nick});wordDraft='';wordMsg='Пожелание опубликовано.'}catch(x){wordMsg='Не получилось отправить пожелание. Попробуйте ещё раз чуть позже.'}
     render()},
-  async worddel(e){try{if(sbOK){const w=words.find(x=>x.id===e.dataset.id);if(w&&w.mine)await rpc('ng_word_del',{p_key:KEY});else await rpc('ng_admin_word_del',{p_pass:adminPass,p_id:e.dataset.id});await loadCommon()}else await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Не получилось убрать пожелание.'}render()},
+  async worddel(e){try{if(sbOK){const w=words.find(x=>x.id===e.dataset.id);if(w&&w.mine)await rpc('ng_word_del',{p_key:KEY});else await arpc('ng_admin_word_del',{p_id:e.dataset.id});await loadCommon()}else await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Не получилось убрать пожелание.'}render()},
   say(e){say(e.dataset.text,e)},
   catf(e){catF=e.dataset.c;render()},
   rustle(e){
@@ -1328,12 +1380,12 @@ const ACT={
   bird(){bubble=BIRD[rnd(BIRD.length)];sfx('tap');render()},
   async thanks(){cheer=null;render();try{if(sbOK){cheerBy[ACC.active]=null;await rpc('ng_cheer_ack',{p_key:KEY,p_pid:ACC.active})}else await db.doc('cheers/'+uid).delete()}catch(x){}},
   async alogin(){const i=$('#apass');adminPass=i?i.value:'';if(!adminPass)return;adminMsg='Проверяем пароль…';render();
-    try{await loadAdmin();try{sessionStorage.setItem('ng_admin',adminPass)}catch(x){}adminMsg=''}catch(x){adminPass='';adminMsg='Пароль не подошёл или база сейчас недоступна.'}
+    try{await loadAdmin();try{sessionStorage.setItem('ng_admin',adminPass)}catch(x){}adminMsg=''}catch(x){adminPass='';adminMsg=x&&x.code==='locked'?'Слишком много неверных попыток. Вход с этого адреса закрыт на 15 минут.':x&&x.code==='forbidden'?'Пароль не подошёл.':'База сейчас недоступна. Попробуйте позже.'}
     render()},
   alogout(){adminPass='';isOwner=false;people=[];online=new Set();sel=null;try{sessionStorage.removeItem('ng_admin')}catch(x){}render()},
   cheer(e){const i=$('#cheer');if(i){i.value=CHEERS[+e.dataset.i];i.focus()}},
   async cheersend(e){const i=$('#cheer'),t=i?i.value.trim().slice(0,140):'';if(!t){if(i)i.focus();return}
-    try{if(sbOK)await rpc('ng_admin_cheer',{p_pass:adminPass,p_id:e.dataset.id,p_text:t});else{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''})}cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
+    try{if(sbOK)await arpc('ng_admin_cheer',{p_id:e.dataset.id,p_text:t});else{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''})}cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
     render()},
   copymine(){copy(JSON.stringify({nick:S.nick,apples:S.apples,flowers:S.flowers,days:S.days,history:S.hist.map(h=>({game:gname(h.g),level:h.l+1,date:new Date(h.at).toISOString(),seconds:h.d,score:h.s}))},null,1))},
   csv(){copy(['Участник;Сегодня;Неделя;Месяц;Яблок;Последний визит'].concat(people.map(p=>{const s=pstat(p);return[String(p.nick||'').replace(/;/g,','),s.today,s.week,s.month,+p.apples||0,p.seen?new Date(p.seen).toISOString():''].join(';')})).join('\n'))}
