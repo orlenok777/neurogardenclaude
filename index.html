@@ -228,6 +228,18 @@ h3{margin-top:6px}
 </div>
 <script>
 "use strict";
+/* ---------- optional own backend (Supabase) ----------
+   Fill in both values to let anyone play under a name without sign-in.
+   SB_KEY is the project's publishable (public) key. Used only outside Claude. See supabase.sql. */
+const SB_URL='', SB_KEY='';
+let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminPass='', adminMsg='';
+async function rpc(fn,args){
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
+  try{
+    const r=await fetch(SB_URL.replace(/\/$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(args||{}),signal:ctl.signal});
+    const t=await r.text();if(!r.ok)throw{code:r.status,message:t};return t?JSON.parse(t):null;
+  }finally{clearTimeout(tm)}
+}
 /* ---------- helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -253,7 +265,7 @@ let people=[], names={}, online=new Set(), trees=[], adminTab='live', sel=null, 
 let saving=false, dirty=false, lastTree='';
 let words=[], wordDraft='', hereN=0, wordMsg='';
 let tts=null, ttsOff=false, speaking=false, bubble='', cheer=null, cheerMsg='', catF='all';
-const typing=()=>document.activeElement&&['word','q','cheer'].includes(document.activeElement.id);
+const typing=()=>document.activeElement&&['word','q','cheer','apass'].includes(document.activeElement.id);
 
 let ACC={profiles:{},active:''}, adding=false, breathT=null;
 const clone=o=>JSON.parse(JSON.stringify(o));
@@ -269,7 +281,27 @@ function normalize(o){
   Object.keys(pr).slice(0,8).forEach(k=>{const st=Object.assign(blank(),pr[k]);if(!Array.isArray(st.hist))st.hist=[];if(!st.lv||typeof st.lv!=='object')st.lv={};if(!st.tot||typeof st.tot!=='object')st.tot={};out.profiles[k]=st});
   return out;
 }
-function useProfile(pid){ACC.active=pid;S=ACC.profiles[pid];housekeeping()}
+function useProfile(pid){ACC.active=pid;S=ACC.profiles[pid];housekeeping();if(sbOK){lsSet('ng_active',pid);const c=cheerBy[pid];cheer=c?Object.assign({pid},c):null}}
+function applyMeta(r,pid){
+  if(!r)return;if(r.id)MY[pid]=r.id;
+  const had=JSON.stringify(cheerBy[pid]||null),c=r.cheer||null,n=+r.online||0,ch=JSON.stringify(c)!==had||n!==hereN;
+  cheerBy[pid]=c;hereN=n;
+  if(pid===ACC.active){cheer=c?Object.assign({pid},c):null;if(ch&&route==='garden'&&!adding)render()}
+}
+function heartbeat(){if(sbOK&&mode==='account'&&S.nick&&!document.hidden){const k=ACC.active;rpc('ng_ping',{p_key:KEY,p_pid:k}).then(r=>applyMeta(r,k)).catch(()=>{})}}
+async function loadCommon(){const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);trees=t||[];words=w||[]}
+async function loadAdmin(){
+  const rows=await rpc('ng_admin_list',{p_pass:adminPass})||[];
+  people=rows.map(r=>Object.assign({},r.state,{id:r.id,uid:r.dev,pid:r.pid,seen:r.seen}));
+  online=new Set(rows.filter(r=>r.age<75).map(r=>r.id));isOwner=true;
+}
+function sbRoute(){
+  if(!sbOK)return;
+  if(route==='common')loadCommon().then(()=>{if(route==='common'&&!typing())render()}).catch(()=>{});
+  if(route==='admin'&&adminPass)loadAdmin().then(()=>{if(route==='admin'&&!typing())render()}).catch(()=>{});
+}
+const isMine=w=>sbOK?!!w.mine:isMine(w);
+const myTreeId=()=>sbOK?MY[ACC.active]:uid+'~'+ACC.active;
 const pres=()=>{if(room)room.presence({acc:mode==='account'&&S.nick?1:null,pid:ACC.active||null}).catch(()=>{})};
 function housekeeping(){
   if(!S.tot||typeof S.tot!=='object')S.tot={};
@@ -290,12 +322,13 @@ async function save(){
   while(dirty){
     dirty=false;
     try{
+      if(sbOK){const k=ACC.active,st=clone(S);st._mon=monApples(S);st._monKey=monKey();applyMeta(await rpc('ng_save',{p_key:KEY,p_pid:k,p_state:st}),k)}else{
       await db.doc('activity/'+uid).set(clone(ACC));
       const list=treeDoc(),t=JSON.stringify(list);
       if(t!==lastTree){
         if(Object.keys(list).length)await db.doc('trees/'+uid).set({list});else await db.doc('trees/'+uid).delete();
         lastTree=t;
-      }
+      }}
     }catch(e){
       if(e&&e.code==='invalid_argument'){
         mode='device';accountOK=false;lsSet('ng_mode','device');lsSet('ng_state',JSON.stringify(ACC));
@@ -310,7 +343,8 @@ async function save(){
 async function setMode(m){
   mode=m;lsSet('ng_mode',m);lastTree='';let raw=null;
   if(m==='account'){
-    try{const snap=await withTimeout(db.doc('activity/'+uid).get(),10000);raw=snap.exists?clone(snap.data()):null}
+    try{if(sbOK){const rows=await rpc('ng_load',{p_key:KEY})||[];raw={profiles:{},active:lsGet('ng_active')||''};MY={};cheerBy={};rows.forEach(r=>{raw.profiles[r.pid]=r.state;MY[r.pid]=r.id;cheerBy[r.pid]=r.cheer||null})}
+      else{const snap=await withTimeout(db.doc('activity/'+uid).get(),10000);raw=snap.exists?clone(snap.data()):null}}
     catch(e){mode='device';notice='Не удалось связаться с хранилищем аккаунта. Пока сад сохраняется на этом устройстве.'}
   }
   if(mode==='device'){try{raw=JSON.parse(lsGet('ng_state')||'null')}catch(e){raw=null}}
@@ -327,7 +361,13 @@ async function init(){
     [db,user,room,tts]=await Promise.all([get('db'),get('user'),get('room'),get('tts')]);
   }
   if(user){uid=await user.id();isOwner=await user.isOwner()}
-  accountOK=!!(db&&uid);
+  if(sbOK){
+    KEY=lsGet('ng_key')||'';
+    if(KEY.length<32){const a=new Uint8Array(24);crypto.getRandomValues(a);KEY=[...a].map(x=>x.toString(16).padStart(2,'0')).join('');lsSet('ng_key',KEY)}
+    if(lsGet('ng_key')!==KEY)sbOK=false;
+    try{adminPass=sessionStorage.getItem('ng_admin')||''}catch(e){}
+  }
+  accountOK=!!(db&&uid)||sbOK;
   let m=lsGet('ng_mode');
   if(!['account','device','nosave'].includes(m)||(m==='account'&&!accountOK))m=accountOK?'account':'device';
   await setMode(m);
@@ -349,6 +389,7 @@ async function init(){
     hereN=n;
   },()=>{});
   ready=true;render();
+  if(sbOK){setInterval(heartbeat,30000);setInterval(sbRoute,12000);sbRoute()}
 }
 function applyUI(ui){
   document.documentElement.classList.toggle('big',!!ui.big);
@@ -1078,7 +1119,7 @@ const doneToday=id=>S.hist.some(h=>h.ok&&h.g===id&&dayOf(h.at)===DAY());
 function todays(){const n=Math.floor(Date.now()/864e5);return Object.values(BYCAT).map(a=>a[n%a.length])}
 function plantForm(more){return `<section class="card"><h2>${more?'Добавить ещё одно имя':'Посадите своё дерево'}</h2><p>${more?'У каждого имени своё дерево и своя история. Удобно, если на одном устройстве занимаются несколько человек.':'Напишите имя или псевдоним и сразу начинайте играть. Регистрация не нужна.'}</p>
   <div class="row"><label for="nick" class="small mut" style="flex-basis:100%">Имя для дерева</label><input type="text" id="nick" maxlength="24" autocomplete="nickname"><button class="pri" data-act="plant">Посадить дерево</button>${more?'<button data-act="addcancel">Отмена</button>':''}</div>
-  <p class="small mut">Режим: ${MODE_NAMES[mode]}. Изменить можно в разделе «Настройки».</p></section>`}
+  <p class="small mut">Режим: ${MODE_NAMES[mode]}. Изменить можно в разделе «Настройки».</p>${sbOK&&mode==='account'?'<p class="small mut">Имя, дерево и результаты занятий сохраняются на сервере сада, их видит администратор. Если вы этого не хотите, выберите в настройках режим «На этом устройстве».</p>':''}</section>`}
 function vGarden(){
   if(!ready)return `<section class="card"><p>Открываем сад…</p></section>`;
   if(!S.nick&&mode!=='nosave')return (notice?`<p class="note">${esc(notice)}</p>`:'')+plantForm();
@@ -1123,7 +1164,7 @@ function vProgress(){
    <div class="row"><button data-act="copymine">Скопировать мои результаты</button><span id="copied" class="small mut" role="status"></span></div></section>`;
 }
 function vCommon(){
-  if(!db)return `<section class="card"><h2>Общий сад</h2><p>Общий сад виден участникам, которые вошли в Claude и открыли эту страницу по приглашению.</p></section>`;
+  if(!db&&!sbOK)return `<section class="card"><h2>Общий сад</h2><p>Общий сад виден участникам, которые вошли в Claude и открыли эту страницу по приглашению.</p></section>`;
   const q=search.trim().toLowerCase(),list=trees.filter(t=>!q||String(t.nick||'').toLowerCase().includes(q));
   const total=trees.reduce((a,t)=>a+(+t.apples||0),0);
   const mk=monKey(),harv=trees.reduce((a,t)=>a+(t.monKey===mk?(+t.mon||0):0),0),goal=[50,100,250,500,1000,2500,5000,10000].find(g=>g>harv)||harv;
@@ -1132,10 +1173,10 @@ function vCommon(){
   return `<section class="card"><h2>Общий сад</h2><p>Деревьев: ${trees.length}. Всего выращено яблок: ${total}.${hereN>1?` Сейчас в саду ${hereN} чел.`:''}</p>
    <div><p class="small mut">Урожай месяца: ${harv} из ${goal} яблок. Его растят все вместе.</p><div class="bar"><i style="width:${Math.min(100,harv/goal*100).toFixed(0)}%"></i></div></div>
    <div class="row"><label for="q" class="small mut">Найти дерево по имени</label><input type="text" id="q" value="${esc(search)}" data-in="search"></div>
-   ${list.length?`<div class="trees">${list.map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'Без имени')}</b><span class="small mut">${+t.apples||0} яблок${t.id===uid+'~'+ACC.active?' · это вы':''}</span></div>`).join('')}</div>`:`<p class="mut">${trees.length?'Такого дерева нет.':'В общем саду пока нет деревьев. Первое появится после первой посадки.'}</p>`}
+   ${list.length?`<div class="trees">${list.map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'Без имени')}</b><span class="small mut">${+t.apples||0} яблок${t.id===myTreeId()?' · это вы':''}</span></div>`).join('')}</div>`:`<p class="mut">${trees.length?'Такого дерева нет.':'В общем саду пока нет деревьев. Первое появится после первой посадки.'}</p>`}
    <p class="small mut">Здесь видны только имя дерева, яблоки и цветы. Игры, результаты и время занятий другим участникам не показываются.</p></section>
   <section class="card"><h2>Добрые слова</h2><p class="mut">Оставьте пожелание другим садовникам. У каждого одно пожелание, его можно менять.</p>
-   ${ws.length?`<div class="list">${ws.map(w=>`<div class="word"><p>${esc(w.text.slice(0,140))}<br><span class="small mut">${esc(typeof w.nick==='string'&&w.nick?w.nick.slice(0,24):'Участник сада')}${w.id===uid?' · это вы':''}</span></p>${w.id===uid||isOwner?`<button data-act="worddel" data-id="${esc(w.id)}">Убрать</button>`:''}</div>`).join('')}</div>`:'<p class="mut">Пока никто ничего не написал. Ваше пожелание может стать первым.</p>'}
+   ${ws.length?`<div class="list">${ws.map(w=>`<div class="word"><p>${esc(w.text.slice(0,140))}<br><span class="small mut">${esc(typeof w.nick==='string'&&w.nick?w.nick.slice(0,24):'Участник сада')}${isMine(w)?' · это вы':''}</span></p>${isMine(w)||isOwner?`<button data-act="worddel" data-id="${esc(w.id)}">Убрать</button>`:''}</div>`).join('')}</div>`:'<p class="mut">Пока никто ничего не написал. Ваше пожелание может стать первым.</p>'}
    ${canWrite?`<div class="chips">${WISHES.map((w,i)=>`<button data-act="wish" data-i="${i}">${w}</button>`).join('')}</div>
    <div class="row"><label for="word" class="small mut" style="flex-basis:100%">Или напишите своими словами</label><input type="text" id="word" maxlength="140" data-in="word" value="${esc(wordDraft)}"><button class="pri" data-act="wordsend">Оставить пожелание</button></div><p id="wordmsg" class="small mut" role="status">${esc(wordMsg)}</p>`:'<p class="small mut">Писать пожелания могут участники в режиме «Аккаунт», посадившие дерево.</p>'}</section>`;
 }
@@ -1164,6 +1205,9 @@ function adminDetail(p,s){
   <div class="row">${confirmDel===p.id?`<span>Удалить дерево и все результаты участника?</span><button class="danger" data-act="delyes" data-id="${id}">Да, удалить</button><button data-act="delno">Отмена</button>`:`<button class="danger" data-act="delask" data-id="${id}">Удалить участника</button>`}</div></div>`;
 }
 function vAdmin(){
+  if(!isOwner&&sbOK)return `<section class="card"><h2>Панель Ромы</h2><p>Вход для администратора сада.</p>
+    <div class="row"><label for="apass" class="small mut" style="flex-basis:100%">Пароль администратора</label><input type="password" id="apass" autocomplete="current-password" style="font:inherit;min-height:48px;padding:8px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)"><button class="pri" data-act="alogin">Войти</button></div>
+    <p class="small mut" role="status">${esc(adminMsg)}</p></section>`;
   if(!isOwner)return `<section class="card"><h2>Панель администратора</h2><p>Этот раздел открыт только владельцу сада.</p></section>`;
   const st=people.map(p=>[p,pstat(p)]);
   const tiles=`<div class="tiles"><div class="tile"><b>${people.length}</b><span>участников</span></div><div class="tile"><b>${st.filter(x=>x[1].on).length}</b><span>онлайн сейчас</span></div><div class="tile"><b>${st.filter(x=>x[1].playing).length}</b><span>играют сейчас</span></div><div class="tile"><b>${st.reduce((a,x)=>a+x[1].today,0)}</b><span>яблок за сегодня</span></div></div>`;
@@ -1183,13 +1227,13 @@ function vAdmin(){
     const all=st.flatMap(([p,s])=>s.h.map(x=>[p,x])).sort((a,b)=>b[1].at-a[1].at).slice(0,60);
     body=all.length?`<div class="scroll"><table><thead><tr><th>Когда</th><th>Участник</th><th>Упражнение</th><th>Уровень</th><th>Результат</th></tr></thead><tbody>${all.map(([p,x])=>`<tr><td>${when(x.at)}</td><td>${esc(p.nick||'Без имени')}</td><td>${esc(gname(x.g))}</td><td>${x.l+1}</td><td>${x.s==null?'не завершено':x.s+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">Занятий пока не было.</p>';
   }
-  return `<section class="card"><h2>Панель Ромы</h2><p class="mut">Данные приходят из базы и обновляются без перезагрузки. Гости в режиме «Без сохранения» сюда не попадают.</p>${tiles}${tabs}${body}</section>`;
+  return `<section class="card"><div class="row between"><h2>Панель Ромы</h2>${sbOK?'<button data-act="alogout">Выйти из панели</button>':''}</div><p class="mut">Данные приходят из базы и обновляются без перезагрузки. Гости в режиме «Без сохранения» сюда не попадают.</p>${tiles}${tabs}${body}</section>`;
 }
 function vPrefs(){
   const ui=getUI();
   const m=(v,t,d,dis)=>`<label class="radio"><input type="radio" name="mode" id="m_${v}" value="${v}" data-in="mode" ${mode===v?'checked':''} ${dis?'disabled':''}><span><b>${t}</b><br><span class="small mut">${d}</span></span></label>`;
   return `<section class="card"><h2>Как сохранять занятия</h2><fieldset><legend class="small mut">Режим</legend>
-    ${m('account','Аккаунт',accountOK?'Дерево и история хранятся в облаке и открываются с телефона и компьютера. Владелец сада видит ваши занятия.':'Недоступно: нужно войти в Claude и получить доступ к странице с правом участия.',!accountOK)}
+    ${m('account',sbOK?'В общем саду':'Аккаунт',accountOK?(sbOK?'Имя, дерево и история хранятся на сервере сада. Администратор сада видит ваши занятия. Дерево привязано к этому браузеру: на другом устройстве нужно посадить новое.':'Дерево и история хранятся в облаке и открываются с телефона и компьютера. Владелец сада видит ваши занятия.'):'Недоступно: нужно войти в Claude и получить доступ к странице с правом участия.',!accountOK)}
     ${m('device','На этом устройстве','Данные остаются только в этом браузере и никуда не отправляются.')}
     ${m('nosave','Без сохранения','Результаты исчезнут, когда вы закроете страницу. В панели администратора вас не видно.')}</fieldset></section>
   <section class="card"><h2>Моё дерево</h2>
@@ -1205,11 +1249,11 @@ function vPrefs(){
 }
 const ROUTES={garden:['Мой сад',vGarden],games:['Упражнения',vGames],progress:['Прогресс',vProgress],common:['Общий сад',vCommon],admin:['Панель Ромы',vAdmin],prefs:['Настройки',vPrefs]};
 function render(){
-  $('#nav').innerHTML=Object.entries(ROUTES).filter(([k])=>k!=='admin'||isOwner).map(([k,v])=>`<a href="#${k}" ${route===k?'aria-current="page"':''}>${v[0]}</a>`).join('');
+  $('#nav').innerHTML=Object.entries(ROUTES).filter(([k])=>k!=='admin'||isOwner||sbOK).map(([k,v])=>`<a href="#${k}" ${route===k?'aria-current="page"':''}>${v[0]}</a>`).join('');
   $('#main').innerHTML=route==='play'&&G?vPlay():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
   if(route!=='garden')notice='';
 }
-function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render()}
+function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
 window.addEventListener('hashchange',go);
 
 /* ---------- actions ---------- */
@@ -1247,6 +1291,7 @@ const ACT={
   delask(e){confirmDel=e.dataset.id;render()},
   delno(){confirmDel=null;render()},
   async delyes(e){const [u,k]=e.dataset.id.split('~');confirmDel=null;sel=null;
+    if(sbOK){try{await rpc('ng_admin_delete',{p_pass:adminPass,p_id:e.dataset.id});await loadAdmin()}catch(x){}render();return}
     try{const a=db.doc('activity/'+u),sn=await a.get(),x=sn.exists?clone(sn.data()):null;
       if(x&&x.profiles&&k){delete x.profiles[k];if(Object.keys(x.profiles).length)await a.set(x);else await a.delete()}else await a.delete();
       const t=db.doc('trees/'+u),ts=await t.get(),y=ts.exists?clone(ts.data()):null;
@@ -1254,17 +1299,18 @@ const ACT={
     }catch(x){}render()},
   wipeask(){confirmDel='me';render()},
   async wipeyes(){confirmDel=null;
+    if(sbOK&&mode==='account'&&ACC.active){try{await rpc('ng_delete',{p_key:KEY,p_pid:ACC.active})}catch(x){}}
     if(mode==='nosave'){ACC={profiles:{g:blank()},active:'g'};S=ACC.profiles.g}
     else{delete ACC.profiles[ACC.active];const ids=Object.keys(ACC.profiles);
       if(ids.length){useProfile(ids[0]);await save()}
       else{ACC.active='';S=blank();lastTree='';
-        if(mode==='account'){try{await db.doc('activity/'+uid).delete();await db.doc('trees/'+uid).delete()}catch(x){}}else lsSet('ng_state',null)}}
+        if(mode==='account'){if(!sbOK){try{await db.doc('activity/'+uid).delete();await db.doc('trees/'+uid).delete()}catch(x){}}}else lsSet('ng_state',null)}}
     pres();if(location.hash==='#garden')go();else location.hash='garden'},
   wish(e){wordDraft=WISHES[+e.dataset.i];const w=$('#word');if(w){w.value=wordDraft;w.focus()}},
   async wordsend(){const t=($('#word')?$('#word').value:wordDraft).trim().slice(0,140);if(!t){if($('#word'))$('#word').focus();return}
-    try{await db.doc('words/'+uid).set({text:t,at:Date.now(),nick:S.nick});wordDraft='';wordMsg='Пожелание опубликовано.'}catch(x){wordMsg='Не получилось отправить пожелание. Попробуйте ещё раз чуть позже.'}
+    try{if(sbOK){await rpc('ng_word',{p_key:KEY,p_nick:S.nick,p_text:t});await loadCommon()}else await db.doc('words/'+uid).set({text:t,at:Date.now(),nick:S.nick});wordDraft='';wordMsg='Пожелание опубликовано.'}catch(x){wordMsg='Не получилось отправить пожелание. Попробуйте ещё раз чуть позже.'}
     render()},
-  async worddel(e){try{await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Не получилось убрать пожелание.'}render()},
+  async worddel(e){try{if(sbOK){const w=words.find(x=>x.id===e.dataset.id);if(w&&w.mine)await rpc('ng_word_del',{p_key:KEY});else await rpc('ng_admin_word_del',{p_pass:adminPass,p_id:e.dataset.id});await loadCommon()}else await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Не получилось убрать пожелание.'}render()},
   say(e){say(e.dataset.text,e)},
   catf(e){catF=e.dataset.c;render()},
   rustle(e){
@@ -1280,17 +1326,21 @@ const ACT={
     setTimeout(()=>{if(route==='garden')render()},still?0:1500);
   },
   bird(){bubble=BIRD[rnd(BIRD.length)];sfx('tap');render()},
-  async thanks(){cheer=null;render();try{await db.doc('cheers/'+uid).delete()}catch(x){}},
+  async thanks(){cheer=null;render();try{if(sbOK){cheerBy[ACC.active]=null;await rpc('ng_cheer_ack',{p_key:KEY,p_pid:ACC.active})}else await db.doc('cheers/'+uid).delete()}catch(x){}},
+  async alogin(){const i=$('#apass');adminPass=i?i.value:'';if(!adminPass)return;adminMsg='Проверяем пароль…';render();
+    try{await loadAdmin();try{sessionStorage.setItem('ng_admin',adminPass)}catch(x){}adminMsg=''}catch(x){adminPass='';adminMsg='Пароль не подошёл или база сейчас недоступна.'}
+    render()},
+  alogout(){adminPass='';isOwner=false;people=[];online=new Set();sel=null;try{sessionStorage.removeItem('ng_admin')}catch(x){}render()},
   cheer(e){const i=$('#cheer');if(i){i.value=CHEERS[+e.dataset.i];i.focus()}},
   async cheersend(e){const i=$('#cheer'),t=i?i.value.trim().slice(0,140):'';if(!t){if(i)i.focus();return}
-    try{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''});cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
+    try{if(sbOK)await rpc('ng_admin_cheer',{p_pass:adminPass,p_id:e.dataset.id,p_text:t});else{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''})}cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
     render()},
   copymine(){copy(JSON.stringify({nick:S.nick,apples:S.apples,flowers:S.flowers,days:S.days,history:S.hist.map(h=>({game:gname(h.g),level:h.l+1,date:new Date(h.at).toISOString(),seconds:h.d,score:h.s}))},null,1))},
   csv(){copy(['Участник;Сегодня;Неделя;Месяц;Яблок;Последний визит'].concat(people.map(p=>{const s=pstat(p);return[String(p.nick||'').replace(/;/g,','),s.today,s.week,s.month,+p.apples||0,p.seen?new Date(p.seen).toISOString():''].join(';')})).join('\n'))}
 };
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(t&&ACT[t.dataset.act])ACT[t.dataset.act](t)});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('g[data-act]')){e.preventDefault();ACT[e.target.dataset.act](e.target)}
-  if(e.key==='Enter'&&e.target.id==='nick')ACT.plant()});
+  if(e.key==='Enter'&&e.target.id==='nick')ACT.plant();if(e.key==='Enter'&&e.target.id==='apass')ACT.alogin()});
 document.addEventListener('input',e=>{if(e.target.dataset.in==='word'){wordDraft=e.target.value;return}
   if(e.target.dataset.in==='search'){search=e.target.value;const pos=e.target.selectionStart;render();const q=$('#q');if(q){q.focus();q.setSelectionRange(pos,pos)}}});
 document.addEventListener('change',async e=>{const k=e.target.dataset.in;if(!k||k==='search'||k==='word')return;
