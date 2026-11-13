@@ -31,6 +31,7 @@ await db.exec(`
   create schema auth;
   create table auth.users (id uuid primary key default gen_random_uuid(), email text unique, email_confirmed_at timestamptz);
   create table auth.identities (user_id uuid references auth.users(id), provider text, primary key (user_id, provider));
+  create table auth.sessions (id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id), not_after timestamptz);
   create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb) $$;
   create function auth.uid() returns uuid language sql stable as $$ select nullif(auth.jwt() ->> 'sub', '')::uuid $$;
   grant usage on schema auth to anon, authenticated;
@@ -50,7 +51,7 @@ async function rpc(fn, args = {}, who = null) {
   const keys = Object.keys(args);
   const vals = keys.map(k => (args[k] !== null && typeof args[k] === 'object') ? JSON.stringify(args[k]) : args[k]);
   const q = `select public.${fn}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')}) as r`;
-  const out = who ? await as('authenticated', { sub: who.uid, email: who.email, role: 'authenticated', is_anonymous: !!who.anonymous }, q, vals)
+  const out = who ? await as('authenticated', { sub: who.uid, email: who.email, role: 'authenticated', is_anonymous: !!who.anonymous, ...(who.session ? { session_id: who.session } : {}) }, q, vals)
                   : await as('anon', null, q, vals);
   return out.rows[0].r ?? null;
 }
@@ -60,6 +61,7 @@ async function googleUser(email, { confirmed = true, provider = 'google' } = {})
   await db.query(`insert into auth.identities(user_id, provider) values ($1, $2) on conflict do nothing`, [u.rows[0].id, provider]);
   return { uid: u.rows[0].id, email };
 }
+const newSession = async (uid, notAfter = null) => (await db.query('insert into auth.sessions(user_id, not_after) values ($1, $2) returning id', [uid, notAfter])).rows[0].id;
 const assignOwner = uid => db.exec(ownerSql.replace(ZERO, uid));
 const owners = async () => +(await db.query('select count(*) as n from public.ng_owner')).rows[0].n;
 
@@ -137,17 +139,20 @@ if (selftest) {
   };
   for (const k of Object.keys(before)) ok(`migration 3 leaves ${k} untouched`, before[k] === after[k]);
   ok('migration 3: existing lock is still in force (not reset)', JSON.parse(after.locks).some(r => r.locked_until && new Date(r.locked_until) > new Date()));
-  for (const f of ['ng_admin_list', 'ng_admin_delete', 'ng_admin_cheer', 'ng_admin_word_del'])
-    await denied(`password route closed: anon cannot call ${f}`, () => as('anon', null, `select public.${f}('test-pass-123'${f === 'ng_admin_list' ? '' : `, '${odd.id}'`}${f === 'ng_admin_cheer' ? `, 'x'` : ''})`));
+  ok('password route is unchanged by migration 3: still callable, still locked for the right password', (await rpc('ng_admin_list', { p_pass: 'test-pass-123' })).error === 'locked');
+  ok('...and the lock table still has the same rows after that call', JSON.stringify((await db.query('select ip, fails, locked_until from public.ng_auth order by ip')).rows) === JSON.stringify(JSON.parse(after.locks).map(r => ({ ip: r.ip, fails: r.fails, locked_until: r.locked_until }))));
   ok('players: save still works after migration 3', (await rpc('ng_save', { p_key: K2, p_pid: 'p2', p_state: st({ apples: 5 }), p_rev: 1 })).rev === 2);
   ok('players: shared garden still works', (await rpc('ng_public')).length === 8);
   ok('players: kind words still work', (await rpc('ng_words', { p_key: K2 })).length === 1);
 
   const owner = await googleUser('owner@example.test'), stranger = await googleUser('stranger@example.test');
+  owner.session = await newSession(owner.uid); stranger.session = await newSession(stranger.uid);
   const mailOnly = await googleUser('mail-only@example.test', { provider: 'email' }), unconfirmed = await googleUser('unconfirmed@example.test', { confirmed: false });
-  for (const f of ['ng_owner_whoami()', 'ng_owner_list()', `ng_owner_delete('${odd.id}')`, `ng_owner_cheer('${odd.id}','x')`, `ng_owner_word_del('${w2[0].id}')`, 'ng_is_owner()'])
+  for (const f of ['ng_session_live()', 'ng_owner_whoami()', 'ng_owner_list()', `ng_owner_delete('${odd.id}')`, `ng_owner_cheer('${odd.id}','x')`, `ng_owner_word_del('${w2[0].id}')`, 'ng_is_owner()'])
     await denied(`anon cannot call ${f.split('(')[0]}`, () => as('anon', null, `select public.${f}`));
   await denied('signed-in user cannot call ng_is_owner directly', () => as('authenticated', { sub: stranger.uid }, 'select public.ng_is_owner()'));
+  await denied('signed-in user cannot call ng_session_live directly', () => as('authenticated', { sub: stranger.uid }, 'select public.ng_session_live()'));
+  await denied('signed-in user cannot read auth.sessions', () => as('authenticated', { sub: stranger.uid }, 'select * from auth.sessions'));
   await denied('signed-in user cannot read ng_owner', () => as('authenticated', { sub: stranger.uid }, 'select * from public.ng_owner'));
   await denied('signed-in user cannot write ng_owner', () => as('authenticated', { sub: stranger.uid }, `insert into public.ng_owner(uid) values ('${stranger.uid}')`));
   await denied('signed-in user cannot read ng_players', () => as('authenticated', { sub: stranger.uid }, 'select * from public.ng_players'));
@@ -173,22 +178,39 @@ if (selftest) {
   ok('assignment: the table itself cannot hold two owners', !second && await owners() === 1);
 
   const w = await rpc('ng_owner_whoami', {}, owner);
-  ok('owner: whoami says owner', w.owner === true && w.assigned === true);
+  ok('owner: whoami says owner with a live session', w.owner === true && w.assigned === true && w.session === true);
   const list = await rpc('ng_owner_list', {}, owner);
   ok('owner: list returns all rows with state', list.ok === true && list.rows.length === 8 && list.rows[0].state);
   ok('other signed-in user: whoami not owner, list forbidden', (await rpc('ng_owner_whoami', {}, stranger)).owner === false && (await rpc('ng_owner_list', {}, stranger)).error === 'forbidden');
   ok('other signed-in user: cannot cheer, delete or remove a word', (await rpc('ng_owner_cheer', { p_id: odd.id, p_text: 'x' }, stranger)).ok === false && (await rpc('ng_owner_delete', { p_id: odd.id }, stranger)).ok === false && (await rpc('ng_owner_word_del', { p_id: w2[0].id }, stranger)).ok === false);
   ok('...and nothing changed', (await rpc('ng_load', { p_key: K2 })).length === 8 && (await rpc('ng_words', { p_key: K2 })).length === 1 && (await rpc('ng_load', { p_key: K2 })).every(r => !r.cheer));
   ok('anonymous Supabase session with the owner UID is refused', (await rpc('ng_owner_list', {}, { ...owner, anonymous: true })).error === 'forbidden');
-  ok('claims without sub are refused', (await as('authenticated', { email: 'owner@example.test', role: 'authenticated' }, 'select public.ng_owner_list() as r')).rows[0].r.error === 'forbidden');
-  ok('a forged email claim with another UID is refused', (await as('authenticated', { sub: stranger.uid, email: 'owner@example.test' }, 'select public.ng_owner_list() as r')).rows[0].r.error === 'forbidden');
+  // the token must point at a live session of the same user
+  const noSess = { uid: owner.uid, email: owner.email };
+  ok('owner UID without a session_id claim is refused', (await rpc('ng_owner_list', {}, noSess)).error === 'forbidden' && (await rpc('ng_owner_whoami', {}, noSess)).session === false);
+  ok('owner UID with a malformed session_id is refused', (await rpc('ng_owner_list', {}, { ...noSess, session: 'not-a-uuid' })).error === 'forbidden');
+  ok('owner UID with an unknown session_id is refused', (await rpc('ng_owner_list', {}, { ...noSess, session: crypto.randomUUID() })).error === 'forbidden');
+  ok('owner UID with another user\'s session is refused', (await rpc('ng_owner_list', {}, { ...noSess, session: stranger.session })).error === 'forbidden');
+  const expired = await newSession(owner.uid, new Date(Date.now() - 1000).toISOString());
+  ok('owner UID with an expired session is refused', (await rpc('ng_owner_list', {}, { ...noSess, session: expired })).error === 'forbidden');
+  const signedOut = await newSession(owner.uid);
+  await db.query('delete from auth.sessions where id = $1', [signedOut]);
+  ok('after sign-out (session row deleted) the same token is refused for every panel action',
+     (await rpc('ng_owner_list', {}, { ...noSess, session: signedOut })).error === 'forbidden'
+     && (await rpc('ng_owner_cheer', { p_id: odd.id, p_text: 'x' }, { ...noSess, session: signedOut })).ok === false
+     && (await rpc('ng_owner_delete', { p_id: odd.id }, { ...noSess, session: signedOut })).ok === false
+     && (await rpc('ng_owner_word_del', { p_id: w2[0].id }, { ...noSess, session: signedOut })).ok === false
+     && (await rpc('ng_owner_whoami', {}, { ...noSess, session: signedOut })).session === false);
+  ok('...while the owner\'s other live session keeps working', (await rpc('ng_owner_list', {}, owner)).ok === true);
+  ok('claims without sub are refused', (await as('authenticated', { email: 'owner@example.test', role: 'authenticated', session_id: owner.session }, 'select public.ng_owner_list() as r')).rows[0].r.error === 'forbidden');
+  ok('a forged email claim with another UID is refused', (await as('authenticated', { sub: stranger.uid, email: 'owner@example.test', session_id: stranger.session }, 'select public.ng_owner_list() as r')).rows[0].r.error === 'forbidden');
   ok('owner: cheer works', (await rpc('ng_owner_cheer', { p_id: odd.id, p_text: 'Молодец' }, owner)).ok === true && (await rpc('ng_load', { p_key: K2 })).find(r => r.id === odd.id).cheer.text === 'Молодец');
   ok('owner: word delete works', (await rpc('ng_owner_word_del', { p_id: w2[0].id }, owner)).ok === true && (await rpc('ng_words', { p_key: K2 })).length === 0);
   ok('owner: delete works and leaves a tombstone', (await rpc('ng_owner_delete', { p_id: odd.id }, owner)).ok === true && (await rpc('ng_save', { p_key: K2, p_pid: 'p1', p_state: st(), p_rev: null })).gone === true);
   await db.exec('delete from public.ng_owner');
   ok('owner removed: access ends at once', (await rpc('ng_owner_list', {}, owner)).error === 'forbidden');
   const sp3 = await db.query(`select proname, proconfig from pg_proc where pronamespace='public'::regnamespace and proname like 'ng_%'`);
-  ok('schema 3: all 23 functions pin an empty search_path', sp3.rows.length === 23 && sp3.rows.every(r => (r.proconfig || []).some(c => c === 'search_path=""' || c === 'search_path=')), String(sp3.rows.length));
+  ok('schema 3: all 24 functions pin an empty search_path', sp3.rows.length === 24 && sp3.rows.every(r => (r.proconfig || []).some(c => c === 'search_path=""' || c === 'search_path=')), String(sp3.rows.length));
   const rls = await db.query(`select relname, relrowsecurity from pg_class where relnamespace='public'::regnamespace and relname like 'ng_%' and relkind='r'`);
   ok('RLS enabled on all six tables', rls.rows.length === 6 && rls.rows.every(r => r.relrowsecurity));
   console.log(`\n${pass} passed, ${fail} failed`);
@@ -202,9 +224,10 @@ console.log('schema 3 ok (applied twice)');
 const sessions = new Map(), refreshes = new Map(), codes = new Map();
 let nextGoogle = null, googleOn = true;
 const tok = () => crypto.randomBytes(24).toString('hex');
-function issue(user) {
+async function issue(user, session) {
+  const sid = session || await newSession(user.uid);
   const access = tok(), refresh = tok();
-  sessions.set(access, { ...user, expired: false, refresh }); refreshes.set(refresh, { user, access });
+  sessions.set(access, { ...user, session: sid, expired: false, refresh }); refreshes.set(refresh, { user, access, session: sid });
   return { access_token: access, refresh_token: refresh, token_type: 'bearer', expires_in: 3600, user: { id: user.uid, email: user.email } };
 }
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => { try { r(b ? JSON.parse(b) : {}); } catch (e) { r({}); } }); });
@@ -220,6 +243,7 @@ http.createServer(async (req, res) => {
     if (url.pathname === '/__test/settings') { const b = await readBody(req); googleOn = !!b.google; return send(200, { google: googleOn }); }
     if (url.pathname === '/__test/expire') { sessions.forEach(s => s.expired = true); return send(200, {}); }
     if (url.pathname === '/__test/owner') { const b = await readBody(req); await assignOwner(b.uid); return send(200, { owners: await owners() }); }
+    if (url.pathname === '/__test/kill-sessions') { const b = await readBody(req); await db.query('delete from auth.sessions where user_id = $1', [b.uid]); refreshes.forEach((v, k) => { if (v.user.uid === b.uid) refreshes.delete(k); }); return send(200, {}); }
     if (url.pathname === '/__test/players') return send(200, (await db.query(`select id, pid, state, cheer from public.ng_players order by created_at`)).rows);
     // Supabase Auth imitation
     if (url.pathname === '/auth/v1/settings') return send(200, { external: { google: googleOn, email: true } });
@@ -235,15 +259,15 @@ http.createServer(async (req, res) => {
       if (grant === 'pkce') {
         const c = codes.get(b.auth_code); codes.delete(b.auth_code);
         const good = c && crypto.createHash('sha256').update(String(b.code_verifier || '')).digest('base64url') === c.challenge;
-        return good ? send(200, issue(c.user)) : send(400, { error: 'invalid_grant' });
+        return good ? send(200, await issue(c.user)) : send(400, { error: 'invalid_grant' });
       }
       if (grant === 'refresh_token') {
         const r = refreshes.get(b.refresh_token); if (!r) return send(400, { error: 'invalid_grant' });
-        refreshes.delete(b.refresh_token); sessions.delete(r.access); return send(200, issue(r.user));
+        refreshes.delete(b.refresh_token); return send(200, await issue(r.user, r.session));
       }
       return send(400, { error: 'unsupported_grant_type' });
     }
-    if (url.pathname === '/auth/v1/logout') { const s = sessions.get(bearer); if (s) { refreshes.delete(s.refresh); sessions.delete(bearer); } return send(204); }
+    if (url.pathname === '/auth/v1/logout') { const s = sessions.get(bearer); if (s) { refreshes.forEach((v, k) => { if (v.session === s.session) refreshes.delete(k); }); await db.query('delete from auth.sessions where id = $1', [s.session]); } return send(204); }
     // PostgREST imitation
     const m = url.pathname.match(/^\/rest\/v1\/rpc\/(ng_[a-z_]+)$/);
     if (!m) return send(404, {});

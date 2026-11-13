@@ -2,13 +2,21 @@
 -- Применяется ОДИН раз поверх схемы 2 (supabase.sql). Ничего не удаляет и не меняет данные игроков.
 -- Повторный запуск безопасен.
 --
+-- Перед применением исполнитель может убедиться, что владелец функций читает таблицу сессий:
+--   select has_table_privilege(current_user, 'auth.sessions', 'select');   -- ожидается true
+-- Если прав нет, функции панели будут отвечать ошибкой, то есть панель останется закрытой.
+--
 -- Что меняется:
 --   * Новая таблица ng_owner хранит UID единственного владельца. Пока она пуста, панель закрыта для всех.
 --   * Новые функции ng_owner_* доступны только вошедшим пользователям (роль authenticated) и
 --     выполняют действие, только если auth.uid() совпадает с UID владельца. Проверка идёт на сервере
 --     по подписанному токену Supabase; почта и любые флаги из браузера не учитываются.
---   * Старые функции входа по паролю (ng_admin_*) остаются в базе, но перестают быть доступны снаружи.
---     Таблица блокировок ng_auth и запись о пароле не трогаются.
+--   * Действие выполняется только пока сессия входа жива: при выходе Supabase удаляет строку auth.sessions,
+--     и уже выданный токен перестаёт давать доступ к панели, не дожидаясь истечения своего срока.
+--   * Старый вход по паролю (ng_admin_*) этой миграцией НЕ меняется: функции, запись о пароле и таблица
+--     блокировок ng_auth остаются как были, действующая блокировка продолжает действовать. Новый вход с ней
+--     не связан и её не обходит: он не принимает паролей вообще. Отключение парольного входа вынесено в
+--     отдельный файл supabase-retire-password.sql и применяется только по отдельному решению.
 --   * Поток игроков (ng_save, ng_load, общий сад, добрые слова) не меняется.
 --
 -- Владелец назначается отдельно, файлом supabase-owner.sql, после его подтверждённого личного входа.
@@ -21,18 +29,31 @@ create table if not exists public.ng_owner (
 alter table public.ng_owner enable row level security;
 revoke all on public.ng_owner from public, anon, authenticated;
 
--- Внутренняя проверка: вызывающий вошёл не анонимно и его UID записан как владелец.
+-- Внутренняя проверка: сессия из токена существует в auth.sessions, принадлежит этому пользователю и не истекла.
+-- Подписанный токен сам по себе действует до конца своего срока даже после выхода; эта проверка закрывает
+-- такой токен сразу, как только сессия удалена (выход, «выйти везде», удаление пользователя).
+create or replace function public.ng_session_live() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select auth.uid() is not null
+     and exists (select 1 from auth.sessions s
+                 where s.id::text = (auth.jwt() ->> 'session_id')
+                   and s.user_id = auth.uid()
+                   and (s.not_after is null or s.not_after > now()))
+$$;
+
+-- Внутренняя проверка: вошёл не анонимно, сессия жива, UID записан как владелец.
 create or replace function public.ng_is_owner() returns boolean
 language sql stable security definer set search_path = '' as $$
   select auth.uid() is not null
      and (auth.jwt() ->> 'is_anonymous') is distinct from 'true'
+     and public.ng_session_live()
      and exists (select 1 from public.ng_owner o where o.uid = auth.uid())
 $$;
 
--- Кто я для панели. Не раскрывает, кто владелец; сообщает только, назначен ли он вообще.
+-- Кто я для панели. Не раскрывает, кто владелец; сообщает, жива ли сессия и назначен ли владелец вообще.
 create or replace function public.ng_owner_whoami() returns jsonb
 language sql stable security definer set search_path = '' as $$
-  select jsonb_build_object('ok', true, 'owner', public.ng_is_owner(),
+  select jsonb_build_object('ok', true, 'session', public.ng_session_live(), 'owner', public.ng_is_owner(),
                             'assigned', exists (select 1 from public.ng_owner))
 $$;
 
@@ -80,7 +101,7 @@ end $$;
 -- ---------- права ----------
 
 revoke execute on function
-  public.ng_is_owner(), public.ng_owner_whoami(), public.ng_owner_list(), public.ng_owner_delete(uuid),
+  public.ng_session_live(), public.ng_is_owner(), public.ng_owner_whoami(), public.ng_owner_list(), public.ng_owner_delete(uuid),
   public.ng_owner_cheer(uuid, text), public.ng_owner_word_del(uuid)
 from public, anon, authenticated;
 
@@ -89,11 +110,5 @@ grant execute on function
   public.ng_owner_whoami(), public.ng_owner_list(), public.ng_owner_delete(uuid),
   public.ng_owner_cheer(uuid, text), public.ng_owner_word_del(uuid)
 to authenticated;
-
--- Вход по паролю больше не доступен снаружи. Сами функции, запись о пароле и блокировки остаются как были.
-revoke execute on function
-  public.ng_admin_list(text), public.ng_admin_delete(text, uuid),
-  public.ng_admin_cheer(text, uuid, text), public.ng_admin_word_del(text, uuid)
-from public, anon, authenticated;
 
 notify pgrst, 'reload schema';

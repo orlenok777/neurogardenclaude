@@ -229,7 +229,7 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
-<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Version 3.2</b> · updated <time datetime="2026-11-13T10:55:55+02:00">13 Nov 2026 at 10:55</time> <span class="mut">(Israel time)</span></p><p class="mut" id="prev">Previous version: 3.1 · <time datetime="2026-11-13T10:30:11+02:00">13 Nov 2026 at 10:30</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en" aria-current="page">English</a></p></div><!--/NGTOP-->
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Version 3.3</b> · updated <time datetime="2026-11-13T11:04:43+02:00">13 Nov 2026 at 11:04</time> <span class="mut">(Israel time)</span></p><p class="mut" id="prev">Previous version: 3.2 · <time datetime="2026-11-13T10:55:55+02:00">13 Nov 2026 at 10:55</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en" aria-current="page">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>NeuroGarden</h1><p class="mut small">Small steps. Every day.</p></div>
@@ -467,6 +467,8 @@ async function adminRefresh(){
   if(!AU){AD.state='out';closed();return}
   try{
     const w=await arpc('ng_owner_whoami');AD.assigned=w.assigned===true;
+    /* the server no longer has this session (signed out here or elsewhere): drop it in this tab too */
+    if(w.session===false){auStore(null);AD.state='out';closed();adminMsg='The session has ended. Please sign in again.';return}
     if(w.owner===true){await loadAdmin();AD.state='owner'}else{AD.state='denied';closed()}
   }catch(e){
     closed();const c=e&&e.code;

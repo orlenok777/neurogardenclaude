@@ -243,10 +243,19 @@ async def main():
             tok_o = await ow.evaluate("AU.access_token")
             await ow.click('[data-act=alogout]'); await ow.wait_for_timeout(600)
             ok('10 sign-out: panel closed, session removed from the tab', await ow.evaluate("!AU&&!isOwner&&people.length===0&&sessionStorage.getItem('ng_auth')===null") and 'QA-' not in await ow.evaluate(ADMIN))
-            ok('10 sign-out: the old token no longer works on the server', status('ng_owner_list', tok_o)[0] == 401)
+            # the stand, like real Supabase, still accepts the signed token itself after sign-out; the SQL session check must refuse it
+            ok('10 sign-out: the old token is refused by the server-side session check', status('ng_owner_list', tok_o) == (200, {'ok': False, 'error': 'forbidden'}), status('ng_owner_list', tok_o))
+            ok('10 sign-out: whoami with the old token reports no session and no owner', (lambda w: w['session'] is False and w['owner'] is False)(status('ng_owner_whoami', tok_o)[1]))
             await reload(ow); await ow.evaluate("location.hash='admin'"); await ow.wait_for_timeout(600)
             ok('10 sign-out holds after reload', await ow.evaluate("!AU&&!isOwner&&people.length===0"))
             ok('10 tokens never reach localStorage or the page HTML', await ad.evaluate("!JSON.stringify(Object.assign({},localStorage)).includes(AU.access_token)&&!document.documentElement.outerHTML.includes(AU.access_token)"))
+            # signed out everywhere (sessions removed on the server) while a tab still holds a token
+            post('/__test/google', {'email': 'owner@example.test'}); await google(ow, "isOwner===true")
+            held = await ow.evaluate("AU.access_token")
+            post('/__test/kill-sessions', {'uid': owner['uid']})
+            await ow.evaluate("sbRoute()"); await ow.wait_for_timeout(900)
+            ok('10 session removed on the server: the open panel closes itself and drops the token', await ow.evaluate("!AU&&!isOwner&&people.length===0&&adminMsg.length>0") and 'QA-' not in await ow.evaluate(ADMIN), await ow.evaluate("JSON.stringify([!!AU,isOwner,people.length,AD])"))
+            ok('10 ...and the held token gets nothing from the server', status('ng_owner_list', held)[1] == {'ok': False, 'error': 'forbidden'})
             he_ad = await page(await ctx(), 'he.html#admin'); await he_ad.wait_for_timeout(600)
             ok('10 HE sign-in card is translated', not re.search('[А-Яа-яЁё]', await he_ad.evaluate(ADMIN)) and await he_ad.evaluate("!!document.querySelector('[data-act=alogin]')"))
             # players are unaffected by all of the above
