@@ -8,7 +8,7 @@ The script copies the three built pages to a temp folder with the database addre
 serves them from one origin (like GitHub Pages), starts tests/db-test.mjs as the database and drives Chromium.
 Only synthetic names are used.
 """
-import asyncio, json, os, pathlib, re, shutil, subprocess, sys, tempfile, time, urllib.request
+import asyncio, json, os, pathlib, re, shutil, subprocess, sys, tempfile, time, urllib.error, urllib.request
 from playwright.async_api import async_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -26,6 +26,26 @@ def ok(name, cond, extra=''):
 def rpc(fn, args):
     req = urllib.request.Request(f'http://127.0.0.1:{DB_PORT}/rest/v1/rpc/{fn}', data=json.dumps(args).encode(), headers={'Content-Type': 'application/json'})
     return json.load(urllib.request.urlopen(req))
+
+
+def post(path, body=None):
+    req = urllib.request.Request(f'http://127.0.0.1:{DB_PORT}{path}', data=json.dumps(body or {}).encode(), headers={'Content-Type': 'application/json'})
+    return json.load(urllib.request.urlopen(req))
+
+
+def players():
+    return post('/__test/players')
+
+
+def status(fn, token=None):
+    """HTTP status and body of a direct API call, the way an outsider would make it."""
+    h = {'Content-Type': 'application/json'}
+    if token: h['Authorization'] = 'Bearer ' + token
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(f'http://127.0.0.1:{DB_PORT}/rest/v1/rpc/{fn}', data=b'{}', headers=h))
+        return r.status, json.load(r)
+    except urllib.error.HTTPError as e:
+        return e.code, None
 
 
 def stand():
@@ -76,6 +96,14 @@ async def finish_color(pg):
     return res
 
 
+async def google(pg, cond="true"):
+    """Clicks the Google button, follows the redirect to the (fake) provider and back, waits for the page to settle."""
+    async with pg.expect_navigation():
+        await pg.click('[data-act=alogin]')
+    await pg.wait_for_function("typeof ready!=='undefined'&&ready===true&&location.search===''&&(" + cond + ")")
+    await pg.wait_for_timeout(500)
+
+
 async def reload(pg):
     await pg.reload(); await pg.wait_for_function("ready===true"); await pg.wait_for_timeout(400)
 
@@ -98,7 +126,7 @@ async def main():
             ok('1 server mode is on', await a.evaluate("mode==='account'&&sbOK"))
             await start(a, 'schulte'); await finish_schulte(a); await reload(a)
             ok('1 one tab: finished round and ripe apple survive a full reload', await a.evaluate(f"[{FIN},{QUIT},S.apples].join()") == '1,0,1', await a.evaluate("JSON.stringify(S.hist)"))
-            ok('1 the round is on the server', [r['state']['hist'][0]['s'] for r in rpc('ng_admin_list', {'p_pass': 'test-pass-123'})['rows'] if r['state']['nick'] == 'QA-One'] == [100])
+            ok('1 the round is on the server', [r['state']['hist'][0]['s'] for r in players() if r['state']['nick'] == 'QA-One'] == [100])
 
             # 2. the reported defect: RU round in progress, EN page opened in a second tab, RU round finished
             c2 = await ctx(); ru = await page(c2); await plant(ru, 'QA-Tabs')
@@ -113,7 +141,7 @@ async def main():
             ok('2 RU after reload: apples match the result', await ru.evaluate("S.apples") == (1 if was_ok else 0))
             await reload(en)
             ok('2 EN after reload shows the same finished round', await en.evaluate("JSON.stringify(S.hist.map(h=>[h.g,h.s]))") == json.dumps([['color', score]], separators=(',', ':')))
-            ok('2 no "playing now" left on the server', all(r['state'].get('cur') is None for r in rpc('ng_admin_list', {'p_pass': 'test-pass-123'})['rows'] if r['state']['nick'] == 'QA-Tabs'))
+            ok('2 no "playing now" left on the server', all(r['state'].get('cur') is None for r in players() if r['state']['nick'] == 'QA-Tabs'))
 
             # 3. same with the Hebrew page, and the second tab saves something while the round runs
             c3 = await ctx(); ru3 = await page(c3); await plant(ru3, 'QA-He')
@@ -159,7 +187,7 @@ async def main():
             await a.click('[data-act=addname]'); await a.fill('#nick', 'QA-Two'); await a.click('[data-act=plant]'); await a.wait_for_timeout(500)
             await start(a, 'schulte'); await finish_schulte(a); await reload(a)
             ok('7 two names in one browser keep separate histories', json.loads(await a.evaluate("JSON.stringify(Object.values(ACC.profiles).map(q=>[q.nick,q.hist.length,q.apples]))")) == [['QA-One', 1, 1], ['QA-Two', 1, 1]], await a.evaluate("JSON.stringify(Object.values(ACC.profiles).map(q=>[q.nick,q.hist.length,q.apples]))"))
-            rows = rpc('ng_admin_list', {'p_pass': 'test-pass-123'})['rows']
+            rows = players()
             ok('7 server holds exactly the eight synthetic names', sorted(r['state']['nick'] for r in rows) == sorted(['QA-One', 'QA-Two', 'QA-Tabs', 'QA-He', 'QA-Both', 'QA-Quit', 'QA-Sync', 'QA-Other']), [r['state']['nick'] for r in rows])
 
             # 8. "On this device" mode with two language tabs
@@ -171,7 +199,61 @@ async def main():
             await d2.evaluate("ACT.water()"); await d2.wait_for_timeout(1900)
             await reload(d1)
             ok('8 device mode, two tabs: finished round and watering both kept', await d1.evaluate(f"[mode,{FIN},{QUIT},S.apples,S.waters].join()") == 'device,1,0,1,1', await d1.evaluate("JSON.stringify([mode,S.hist,S.apples,S.waters])"))
-            ok('8 device mode sent nothing to the server', all(r['state']['nick'] != 'QA-Local' for r in rpc('ng_admin_list', {'p_pass': 'test-pass-123'})['rows']))
+            ok('8 device mode sent nothing to the server', all(r['state']['nick'] != 'QA-Local' for r in players()))
+
+            # 10. owner sign-in for the panel (fake Google step, real client code and real SQL checks)
+            ADMIN = "document.querySelector('#main').innerText"
+            ca = await ctx(); ad = await page(ca, '#admin'); await ad.wait_for_timeout(700)
+            ok('10 signed out: Google button shown, no player data', await ad.evaluate("!!document.querySelector('[data-act=alogin]')&&people.length===0&&!isOwner"))
+            ok('10 signed out: direct API calls are refused', status('ng_owner_list')[0] in (401, 403) and status('ng_owner_whoami')[0] in (401, 403))
+            post('/__test/settings', {'google': False}); g0 = await page(await ctx(), '#admin'); await g0.wait_for_timeout(700)
+            ok('10 provider switched off: no button, says not set up', await g0.evaluate("!document.querySelector('[data-act=alogin]')") and 'Google' in await g0.evaluate(ADMIN))
+            post('/__test/settings', {'google': True})
+            post('/__test/google', {})   # nobody picked at the Google step
+            await google(ad, "route==='admin'")
+            ok('10 cancelled Google step: still signed out, message shown, address bar clean', await ad.evaluate("!AU&&!isOwner&&adminMsg.length>0&&location.search===''"))
+
+            stranger = post('/__test/google', {'email': 'stranger@example.test'})
+            await google(ad, "!!AU&&AD.state!=='checking'&&AD.state!=='out'")
+            ok('10 signed in, nobody assigned: closed, says owner not assigned', await ad.evaluate("AD.state==='denied'&&AD.assigned===false&&!isOwner&&people.length===0"), await ad.evaluate("JSON.stringify(AD)"))
+            ok('10 the page shows the account UID for assignment, not player data', await ad.evaluate("document.querySelector('#auid').textContent") == stranger['uid'] and 'QA-' not in await ad.evaluate(ADMIN))
+            ok('10 the one-time code is gone from the address bar', await ad.evaluate("location.search===''&&location.hash==='#admin'"))
+            tok_s = await ad.evaluate("AU.access_token")
+            ok('10 not owner: direct API call with a valid session is forbidden', status('ng_owner_list', tok_s)[1] == {'ok': False, 'error': 'forbidden'})
+
+            cb = await ctx(); ow = await page(cb, 'en.html#admin')
+            owner = post('/__test/google', {'email': 'owner@example.test'})
+            await google(ow, "!!AU&&AD.state==='denied'")
+            ok('10 owner assigned by UID through the template', post('/__test/owner', {'uid': await ow.evaluate("AU.uid")})['owners'] == 1 and await ow.evaluate("AU.uid") == owner['uid'])
+            await ow.evaluate("sbRoute()"); await ow.wait_for_function("isOwner===true")
+            names = json.loads(await ow.evaluate("JSON.stringify(people.map(p=>p.nick).sort())"))
+            ok('10 owner sees the panel with all synthetic names (EN page)', 'QA-One' in names and 'QA-Tabs' in names and len(names) == len(players()), names)
+            ok('10 another confirmed user still sees nothing after the owner is assigned', (await ad.evaluate("sbRoute()") or True) and await ad.evaluate("new Promise(r=>setTimeout(()=>r(AD.state==='denied'&&AD.assigned===true&&people.length===0),800))"))
+            ok('10 a second owner cannot be added', post('/__test/owner', {'uid': stranger['uid']})['owners'] == 1 and status('ng_owner_list', tok_s)[1]['error'] == 'forbidden')
+            target = await ow.evaluate("people.find(p=>p.nick==='QA-Other').id")
+            await ow.evaluate(f"adminTab='live';sel='{target}';render()"); await ow.fill('#cheer', 'QA cheer'); await ow.click('[data-act=cheersend]'); await ow.wait_for_timeout(700)
+            ok('10 owner action reaches the player: cheer delivered', [r['cheer']['text'] for r in players() if r['id'] == target and r['cheer']] == ['QA cheer'])
+            post('/__test/expire'); await ow.evaluate("sbRoute()"); await ow.wait_for_timeout(900)
+            ok('10 expired session is refreshed and the panel keeps working', await ow.evaluate("isOwner===true&&people.length>0&&!!AU"))
+            tok_o = await ow.evaluate("AU.access_token")
+            await reload(ow); await ow.wait_for_function("isOwner===true")
+            ok('10 owner session survives a reload of the same tab', True)
+            ow2 = await page(await ctx(), '#admin'); await ow2.wait_for_timeout(600)
+            ok('10 another browser is not signed in', await ow2.evaluate("!AU&&!isOwner&&people.length===0"))
+            tok_o = await ow.evaluate("AU.access_token")
+            await ow.click('[data-act=alogout]'); await ow.wait_for_timeout(600)
+            ok('10 sign-out: panel closed, session removed from the tab', await ow.evaluate("!AU&&!isOwner&&people.length===0&&sessionStorage.getItem('ng_auth')===null") and 'QA-' not in await ow.evaluate(ADMIN))
+            ok('10 sign-out: the old token no longer works on the server', status('ng_owner_list', tok_o)[0] == 401)
+            await reload(ow); await ow.evaluate("location.hash='admin'"); await ow.wait_for_timeout(600)
+            ok('10 sign-out holds after reload', await ow.evaluate("!AU&&!isOwner&&people.length===0"))
+            ok('10 tokens never reach localStorage or the page HTML', await ad.evaluate("!JSON.stringify(Object.assign({},localStorage)).includes(AU.access_token)&&!document.documentElement.outerHTML.includes(AU.access_token)"))
+            he_ad = await page(await ctx(), 'he.html#admin'); await he_ad.wait_for_timeout(600)
+            ok('10 HE sign-in card is translated', not re.search('[А-Яа-яЁё]', await he_ad.evaluate(ADMIN)) and await he_ad.evaluate("!!document.querySelector('[data-act=alogin]')"))
+            # players are unaffected by all of the above
+            await reload(a)
+            ok('10 players unaffected: names, history and apples as before', json.loads(await a.evaluate("JSON.stringify(Object.values(ACC.profiles).map(q=>[q.nick,q.hist.length,q.apples]))")) == [['QA-One', 1, 1], ['QA-Two', 1, 1]])
+            await o.evaluate("heartbeat()"); await o.wait_for_timeout(700)
+            ok('10 the cheered player sees the cheer in the garden', await o.evaluate("cheer&&cheer.text") == 'QA cheer')
 
             for f, ver in (('', 'Версия'), ('he.html', 'גרסה'), ('en.html', 'Version')):
                 pg = await page(await ctx(), f)

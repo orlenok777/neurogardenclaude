@@ -900,5 +900,17 @@
 "База сейчас недоступна. Попробуйте позже.": "The database is unavailable right now. Please try later.",
 "Отправлено. Участник увидит ваши слова в своём саду.": "Sent. The participant will see your words in their garden.",
 "Не получилось отправить. Попробуйте ещё раз.": "Could not send. Please try again.",
-"Участник;Сегодня;Неделя;Месяц;Яблок;Последний визит": "Participant;Today;Week;Month;Apples;Last visit"
+"Участник;Сегодня;Неделя;Месяц;Яблок;Последний визит": "Participant;Today;Week;Month;Apples;Last visit",
+"Вход через": "Sign-in with",
+"не завершён. Попробуйте ещё раз.": "was not completed. Please try again.",
+"Сеанс закончился. Войдите снова.": "The session has ended. Please sign in again.",
+"Вы вошли как": "You are signed in as",
+"Выйти": "Sign out",
+"ещё не настроен в проекте.": "is not set up in the project yet.",
+"Войти через": "Sign in with",
+"Серверная часть панели ещё не подключена.": "The server part of the panel is not connected yet.",
+"У этого аккаунта нет доступа к панели.": "This account has no access to the panel.",
+"Владелец сада ещё не назначен.": "The garden owner has not been assigned yet.",
+"Идентификатор аккаунта:": "Account identifier:",
+"Проверяем доступ…": "Checking access…"
 }

@@ -229,7 +229,7 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
-<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Версия 3.1</b> · обновлена <time datetime="2026-11-13T10:30:11+02:00">13.11.2026 в 10:30</time> <span class="mut">(время Израиля)</span></p><p class="mut" id="prev">Предыдущая версия: 3.0 · <time datetime="2026-11-13T10:12:19+02:00">13.11.2026 в 10:12</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru" aria-current="page">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Версия 3.2</b> · обновлена <time datetime="2026-11-13T10:55:55+02:00">13.11.2026 в 10:55</time> <span class="mut">(время Израиля)</span></p><p class="mut" id="prev">Предыдущая версия: 3.1 · <time datetime="2026-11-13T10:30:11+02:00">13.11.2026 в 10:30</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru" aria-current="page">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>НейроСад</h1><p class="mut small">Маленькие шаги. Каждый день.</p></div>
@@ -247,13 +247,52 @@ const LOC='ru', TTS_LANG='ru', SPEECH='ru-RU';
    Fill in both values to let anyone play under a name without sign-in.
    SB_KEY is the project's publishable (public) key. Used only outside Claude. See supabase.sql. */
 const SB_URL='https://yzfaysleelxddpbmowyd.supabase.co', SB_KEY='sb_publishable_l9nkMqtiYoi704wSm-wdRA_hNHLBDZj';
-let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminPass='', adminMsg='';
-async function rpc(fn,args){
+let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminMsg='', AU=null, AD={state:'out',google:null,assigned:null};
+async function rpc(fn,args,bearer){
   const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
   try{
-    const r=await fetch(SB_URL.replace(/\/$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(args||{}),signal:ctl.signal});
+    const h={apikey:SB_KEY,'Content-Type':'application/json'};if(bearer)h.Authorization='Bearer '+bearer;
+    const r=await fetch(SB_URL.replace(/\/$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:h,body:JSON.stringify(args||{}),signal:ctl.signal});
     const t=await r.text();if(!r.ok)throw{code:r.status,message:t};return t?JSON.parse(t):null;
   }finally{clearTimeout(tm)}
+}
+/* ---------- owner sign-in for the panel (Supabase Auth, Google, PKCE) ----------
+   Players never sign in. The session lives in this tab only (sessionStorage) and is sent as a bearer token
+   to the ng_owner_* functions; whether the account is the owner is decided on the server from that token. */
+const b64u=a=>btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+function auStore(x){AU=x;try{if(x)sessionStorage.setItem('ng_auth',JSON.stringify(x));else sessionStorage.removeItem('ng_auth')}catch(e){}}
+function auLoad(){try{const x=JSON.parse(sessionStorage.getItem('ng_auth')||'null');AU=x&&typeof x.access_token==='string'&&typeof x.refresh_token==='string'?x:null}catch(e){AU=null}}
+async function authCall(path,body,bearer){
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
+  try{
+    const h={apikey:SB_KEY,'Content-Type':'application/json'};if(bearer)h.Authorization='Bearer '+bearer;
+    const r=await fetch(SB_URL.replace(/\/$/,'')+'/auth/v1/'+path,{method:body===undefined?'GET':'POST',headers:h,body:body===undefined?undefined:JSON.stringify(body),signal:ctl.signal});
+    const t=await r.text();if(!r.ok)throw{code:r.status};return t?JSON.parse(t):null;
+  }finally{clearTimeout(tm)}
+}
+const auFrom=j=>({access_token:j.access_token,refresh_token:j.refresh_token,exp:Date.now()+(typeof j.expires_in==='number'?j.expires_in:3600)*1000,
+  uid:j.user&&typeof j.user.id==='string'?j.user.id:'',email:j.user&&typeof j.user.email==='string'?j.user.email:''});
+async function googleStart(){
+  const v=b64u(crypto.getRandomValues(new Uint8Array(48))),ch=b64u(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v))));
+  sessionStorage.setItem('ng_pkce',v);
+  location.assign(SB_URL.replace(/\/$/,'')+'/auth/v1/authorize?provider=google&redirect_to='+encodeURIComponent(location.origin+location.pathname)+'&code_challenge='+ch+'&code_challenge_method=s256');
+}
+/* Back from Google: exchange the one-time code for a session and remove it from the address bar. */
+async function authReturn(){
+  const q=new URLSearchParams(location.search),code=q.get('code');
+  if(!code&&!q.get('error'))return;
+  let v='';try{v=sessionStorage.getItem('ng_pkce')||'';sessionStorage.removeItem('ng_pkce')}catch(e){}
+  history.replaceState(null,'',location.pathname+'#admin');route='admin';
+  if(code&&v){try{const j=await authCall('token?grant_type=pkce',{auth_code:code,code_verifier:v});if(j&&typeof j.access_token==='string'&&typeof j.refresh_token==='string'){auStore(auFrom(j));AD.state='checking';return}}catch(e){}}
+  adminMsg='Вход через Google не завершён. Попробуйте ещё раз.';
+}
+async function auToken(){
+  if(!AU)throw{code:'signed_out'};
+  if(AU.exp-Date.now()<60000){
+    try{const j=await authCall('token?grant_type=refresh_token',{refresh_token:AU.refresh_token});auStore(auFrom(j))}
+    catch(e){auStore(null);throw{code:'signed_out'}}
+  }
+  return AU.access_token;
 }
 /* ---------- helpers ---------- */
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -382,7 +421,17 @@ async function sbSave(k){
   if(r&&r.rev!=null)REV[k]=r.rev;applyMeta(r,k);
 }
 async function arpc(fn,args){
-  const r=await rpc(fn,Object.assign({p_pass:adminPass},args||{}));
+  let r;
+  for(let i=0;;i++){
+    const t=await auToken();
+    try{r=await rpc(fn,args||{},t);break}
+    catch(e){
+      const c=e&&e.code;
+      if(c===401&&i===0){AU.exp=0;continue}                /* token refused: refresh once and retry */
+      if(c===401){auStore(null);throw{code:'signed_out'}}
+      throw{code:c===404?'nomig':c===403?'forbidden':'unavailable'};
+    }
+  }
   if(!r||r.ok!==true)throw{code:(r&&r.error)||'error'};return r;
 }
 const clone=o=>JSON.parse(JSON.stringify(o));
@@ -408,14 +457,27 @@ function applyMeta(r,pid){
 function heartbeat(){if(sbOK&&mode==='account'&&S.nick&&!document.hidden){const k=ACC.active;rpc('ng_ping',{p_key:KEY,p_pid:k}).then(r=>applyMeta(r,k)).catch(()=>{})}}
 async function loadCommon(){const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);trees=(Array.isArray(t)?t:[]).map(x=>cleanTree(x,x&&x.id,x&&x.id));words=(Array.isArray(w)?w:[]).filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id),text:x.text,nick:x.nick,at:num(x.at),mine:x.mine===true}))}
 async function loadAdmin(){
-  const rows=((await arpc('ng_admin_list')).rows||[]).filter(r=>r&&typeof r==='object');
+  const rows=((await arpc('ng_owner_list')).rows||[]).filter(r=>r&&typeof r==='object');
   people=rows.map(r=>Object.assign(cleanState(r.state),{id:String(r.id),uid:String(r.dev),pid:String(r.pid),seen:num(r.seen)}));
   online=new Set(rows.filter(r=>num(r.age,1e9)<75).map(r=>String(r.id)));isOwner=true;
+}
+async function adminRefresh(){
+  const closed=()=>{isOwner=false;people=[];online=new Set()};
+  if(AD.google===null){try{const x=await authCall('settings');AD.google=!!(x&&x.external&&x.external.google)}catch(e){AD.google=undefined}}
+  if(!AU){AD.state='out';closed();return}
+  try{
+    const w=await arpc('ng_owner_whoami');AD.assigned=w.assigned===true;
+    if(w.owner===true){await loadAdmin();AD.state='owner'}else{AD.state='denied';closed()}
+  }catch(e){
+    closed();const c=e&&e.code;
+    AD.state=c==='signed_out'?'out':c==='nomig'?'nomig':c==='forbidden'?'denied':'error';
+    if(c==='signed_out')adminMsg='Сеанс закончился. Войдите снова.';
+  }
 }
 function sbRoute(){
   if(!sbOK)return;
   if(route==='common')loadCommon().then(()=>{if(route==='common'&&!typing())render()}).catch(()=>{});
-  if(route==='admin'&&adminPass)loadAdmin().then(()=>{if(route==='admin'&&!typing())render()}).catch(()=>{});
+  if(route==='admin')adminRefresh().then(()=>{if(route==='admin'&&!typing())render()}).catch(()=>{});
 }
 const isMine=w=>sbOK?!!w.mine:w.id===uid;
 const myTreeId=()=>sbOK?MY[ACC.active]:uid+'~'+ACC.active;
@@ -482,7 +544,7 @@ async function init(){
     KEY=lsGet('ng_key')||'';
     if(KEY.length<32){const a=new Uint8Array(24);crypto.getRandomValues(a);KEY=[...a].map(x=>x.toString(16).padStart(2,'0')).join('');lsSet('ng_key',KEY)}
     if(lsGet('ng_key')!==KEY)sbOK=false;
-    try{adminPass=sessionStorage.getItem('ng_admin')||''}catch(e){}
+    auLoad();await authReturn();
   }
   accountOK=!!(db&&uid)||sbOK;
   let m=lsGet('ng_mode');
@@ -1325,9 +1387,16 @@ function adminDetail(p,s){
   <div class="row">${confirmDel===p.id?`<span>Удалить дерево и все результаты участника?</span><button class="danger" data-act="delyes" data-id="${id}">Да, удалить</button><button data-act="delno">Отмена</button>`:`<button class="danger" data-act="delask" data-id="${id}">Удалить участника</button>`}</div></div>`;
 }
 function vAdmin(){
-  if(!isOwner&&sbOK)return `<section class="card"><h2>Панель Ромы</h2><p>Вход для администратора сада.</p>
-    <div class="row"><label for="apass" class="small mut" style="flex-basis:100%">Пароль администратора</label><input type="password" id="apass" autocomplete="current-password" style="font:inherit;min-height:48px;padding:8px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)"><button class="pri" data-act="alogin">Войти</button></div>
-    <p class="small mut" role="status">${esc(adminMsg)}</p></section>`;
+  if(!isOwner&&sbOK){
+    const who=AU?`<p>Вы вошли как <b>${esc(AU.email||'')}</b>.</p>`:'',out='<div class="row"><button data-act="alogout">Выйти</button></div>';
+    let body;
+    if(!AU)body=AD.google===false?'<p class="note">Вход через Google ещё не настроен в проекте.</p>':'<div class="row"><button class="pri" data-act="alogin">Войти через Google</button></div>';
+    else if(AD.state==='nomig')body=who+'<p class="note">Серверная часть панели ещё не подключена.</p>'+out;
+    else if(AD.state==='error')body=who+'<p class="note">База сейчас недоступна. Попробуйте позже.</p>'+out;
+    else if(AD.state==='denied')body=who+`<p class="note">У этого аккаунта нет доступа к панели.${AD.assigned===false?' Владелец сада ещё не назначен.':''}</p><p class="small mut">Идентификатор аккаунта: <span id="auid" style="user-select:all;overflow-wrap:anywhere">${esc(AU.uid)}</span></p>`+out;
+    else body=who+'<p class="mut">Проверяем доступ…</p>';
+    return `<section class="card"><h2>Панель Ромы</h2><p>Вход для администратора сада.</p>${body}<p class="small mut" role="status">${esc(adminMsg)}</p></section>`;
+  }
   if(!isOwner)return `<section class="card"><h2>Панель администратора</h2><p>Этот раздел открыт только владельцу сада.</p></section>`;
   const st=people.map(p=>[p,pstat(p)]);
   const tiles=`<div class="tiles"><div class="tile"><b>${people.length}</b><span>участников</span></div><div class="tile"><b>${st.filter(x=>x[1].on).length}</b><span>онлайн сейчас</span></div><div class="tile"><b>${st.filter(x=>x[1].playing).length}</b><span>играют сейчас</span></div><div class="tile"><b>${st.reduce((a,x)=>a+x[1].today,0)}</b><span>яблок за сегодня</span></div></div>`;
@@ -1411,7 +1480,7 @@ const ACT={
   delask(e){confirmDel=e.dataset.id;render()},
   delno(){confirmDel=null;render()},
   async delyes(e){const [u,k]=e.dataset.id.split('~');confirmDel=null;sel=null;
-    if(sbOK){try{await arpc('ng_admin_delete',{p_id:e.dataset.id});await loadAdmin()}catch(x){}render();return}
+    if(sbOK){try{await arpc('ng_owner_delete',{p_id:e.dataset.id});await loadAdmin()}catch(x){}render();return}
     try{const a=db.doc('activity/'+u),sn=await a.get(),x=sn.exists?clone(sn.data()):null;
       if(x&&x.profiles&&k){delete x.profiles[k];if(Object.keys(x.profiles).length)await a.set(x);else await a.delete()}else await a.delete();
       const t=db.doc('trees/'+u),ts=await t.get(),y=ts.exists?clone(ts.data()):null;
@@ -1431,7 +1500,7 @@ const ACT={
   async wordsend(){const t=($('#word')?$('#word').value:wordDraft).trim().slice(0,140);if(!t){if($('#word'))$('#word').focus();return}
     try{if(sbOK){await rpc('ng_word',{p_key:KEY,p_nick:S.nick,p_text:t});await loadCommon()}else await db.doc('words/'+uid).set({text:t,at:Date.now(),nick:S.nick});wordDraft='';wordMsg='Пожелание опубликовано.'}catch(x){wordMsg='Не получилось отправить пожелание. Попробуйте ещё раз чуть позже.'}
     render()},
-  async worddel(e){try{if(sbOK){const w=words.find(x=>x.id===e.dataset.id);if(w&&w.mine)await rpc('ng_word_del',{p_key:KEY});else await arpc('ng_admin_word_del',{p_id:e.dataset.id});await loadCommon()}else await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Не получилось убрать пожелание.'}render()},
+  async worddel(e){try{if(sbOK){const w=words.find(x=>x.id===e.dataset.id);if(w&&w.mine)await rpc('ng_word_del',{p_key:KEY});else await arpc('ng_owner_word_del',{p_id:e.dataset.id});await loadCommon()}else await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Не получилось убрать пожелание.'}render()},
   say(e){say(e.dataset.text,e)},
   catf(e){catF=e.dataset.c;render()},
   rustle(e){
@@ -1448,20 +1517,19 @@ const ACT={
   },
   bird(){bubble=BIRD[rnd(BIRD.length)];sfx('tap');render()},
   async thanks(){cheer=null;render();try{if(sbOK){cheerBy[ACC.active]=null;await rpc('ng_cheer_ack',{p_key:KEY,p_pid:ACC.active})}else await db.doc('cheers/'+uid).delete()}catch(x){}},
-  async alogin(){const i=$('#apass');adminPass=i?i.value:'';if(!adminPass)return;adminMsg='Проверяем пароль…';render();
-    try{await loadAdmin();try{sessionStorage.setItem('ng_admin',adminPass)}catch(x){}adminMsg=''}catch(x){adminPass='';adminMsg=x&&x.code==='locked'?'Слишком много неверных попыток. Вход с этого адреса закрыт на 15 минут.':x&&x.code==='forbidden'?'Пароль не подошёл.':'База сейчас недоступна. Попробуйте позже.'}
-    render()},
-  alogout(){adminPass='';isOwner=false;people=[];online=new Set();sel=null;try{sessionStorage.removeItem('ng_admin')}catch(x){}render()},
+  async alogin(){adminMsg='';try{await googleStart()}catch(x){adminMsg='Вход через Google не завершён. Попробуйте ещё раз.';render()}},
+  async alogout(){const t=AU&&AU.access_token;auStore(null);AD.state='out';isOwner=false;people=[];online=new Set();sel=null;adminMsg='';render();
+    if(t){try{await authCall('logout',{},t)}catch(x){}}},
   cheer(e){const i=$('#cheer');if(i){i.value=CHEERS[+e.dataset.i];i.focus()}},
   async cheersend(e){const i=$('#cheer'),t=i?i.value.trim().slice(0,140):'';if(!t){if(i)i.focus();return}
-    try{if(sbOK)await arpc('ng_admin_cheer',{p_id:e.dataset.id,p_text:t});else{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''})}cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
+    try{if(sbOK)await arpc('ng_owner_cheer',{p_id:e.dataset.id,p_text:t});else{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''})}cheerMsg='Отправлено. Участник увидит ваши слова в своём саду.'}catch(x){cheerMsg='Не получилось отправить. Попробуйте ещё раз.'}
     render()},
   copymine(){copy(JSON.stringify({nick:S.nick,apples:S.apples,flowers:S.flowers,days:S.days,history:S.hist.map(h=>({game:gname(h.g),level:h.l+1,date:new Date(h.at).toISOString(),seconds:h.d,score:h.s}))},null,1))},
   csv(){copy(['Участник;Сегодня;Неделя;Месяц;Яблок;Последний визит'].concat(people.map(p=>{const s=pstat(p);return[String(p.nick||'').replace(/;/g,','),s.today,s.week,s.month,+p.apples||0,p.seen?new Date(p.seen).toISOString():''].join(';')})).join('\n'))}
 };
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(t&&ACT[t.dataset.act])ACT[t.dataset.act](t)});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('g[data-act]')){e.preventDefault();ACT[e.target.dataset.act](e.target)}
-  if(e.key==='Enter'&&e.target.id==='nick')ACT.plant();if(e.key==='Enter'&&e.target.id==='apass')ACT.alogin()});
+  if(e.key==='Enter'&&e.target.id==='nick')ACT.plant()});
 document.addEventListener('input',e=>{if(e.target.dataset.in==='word'){wordDraft=e.target.value;return}
   if(e.target.dataset.in==='search'){search=e.target.value;const pos=e.target.selectionStart;render();const q=$('#q');if(q){q.focus();q.setSelectionRange(pos,pos)}}});
 document.addEventListener('change',async e=>{const k=e.target.dataset.in;if(!k||k==='search'||k==='word')return;
