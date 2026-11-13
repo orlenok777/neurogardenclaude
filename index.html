@@ -207,6 +207,19 @@ h3{margin-top:6px}
 @keyframes breathe{0%{transform:scale(.68)}40%{transform:scale(1)}100%{transform:scale(.68)}}
 .still .breath{animation:none}
 @media (prefers-reduced-motion:reduce){.breath{animation:none}}
+
+.top{padding:10px 0 0;font-size:.8rem;line-height:1.45;display:flex;flex-direction:column;gap:2px}
+.top p{margin:0}
+.top .langs{display:flex;gap:8px;flex-wrap:wrap;padding-top:6px}
+.top .langs a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;font-weight:500}
+.top .langs a[aria-current="page"]{background:var(--leaf);color:var(--onleaf);border-color:var(--leaf)}
+[dir=rtl] .note{border-left:none;border-right:4px solid var(--sun);border-radius:12px 0 0 12px}
+[dir=rtl] .hb i{border-radius:4px 0 0 4px}
+[dir=rtl] .sw{margin:0 10px 0 4px}
+[dir=rtl] .sw:first-child{margin-right:0}
+[dir=rtl] .word{border-radius:16px 16px 4px 16px}
+[dir=rtl] th,[dir=rtl] td{text-align:right}
+[dir=rtl] .grid,[dir=rtl] .mini,[dir=rtl] .mirror,[dir=rtl] .stim,[dir=rtl] .jugs,[dir=rtl] .bar,[dir=rtl] .vbars,[dir=rtl] .keep,[dir=rtl] .scene{direction:ltr}
 </style>
 </head>
 <body>
@@ -216,10 +229,11 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Версия 3.0</b> · обновлена <time datetime="2026-11-13T10:12:19+02:00">13.11.2026 в 10:12</time> <span class="mut">(время Израиля)</span></p><p class="mut" id="prev">Предыдущая версия: 2.9 · <time datetime="2026-11-13T09:45:19+02:00">13.11.2026 в 09:45</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru" aria-current="page">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>НейроСад</h1><p class="mut small">Маленькие шаги. Каждый день.</p></div>
-      <div class="row" style="flex:none;flex-wrap:nowrap"><span class="pill" id="ver" title="Номер версии сайта">версия 2.9</span><button id="aplus" data-act="big" aria-pressed="false" aria-label="Крупный текст">A+</button></div>
+      <div class="row" style="flex:none;flex-wrap:nowrap"><button id="aplus" data-act="big" aria-pressed="false" aria-label="Крупный текст">A+</button></div>
     </div>
   </header>
   <nav id="nav" aria-label="Разделы"></nav>
@@ -228,10 +242,11 @@ h3{margin-top:6px}
 </div>
 <script>
 "use strict";
+const LOC='ru', TTS_LANG='ru', SPEECH='ru-RU';
 /* ---------- optional own backend (Supabase) ----------
    Fill in both values to let anyone play under a name without sign-in.
    SB_KEY is the project's publishable (public) key. Used only outside Claude. See supabase.sql. */
-const SB_URL='', SB_KEY='';
+const SB_URL='https://yzfaysleelxddpbmowyd.supabase.co', SB_KEY='sb_publishable_l9nkMqtiYoi704wSm-wdRA_hNHLBDZj';
 let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminPass='', adminMsg='';
 async function rpc(fn,args){
   const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
@@ -249,8 +264,8 @@ const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],
 const pick=(a,k)=>shuffle(a).slice(0,k);
 const dayOf=t=>new Date(t).toLocaleDateString('sv');
 const DAY=()=>dayOf(Date.now());
-const hm=t=>new Date(t).toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
-const dm=t=>new Date(t).toLocaleDateString('ru',{day:'numeric',month:'short'});
+const hm=t=>new Date(t).toLocaleTimeString(LOC,{hour:'2-digit',minute:'2-digit'});
+const dm=t=>new Date(t).toLocaleDateString(LOC,{day:'numeric',month:'short'});
 const when=t=>!t?'—':(dayOf(t)===DAY()?'сегодня, '+hm(t):dm(t)+', '+hm(t));
 const dur=s=>s<60?s+' с':Math.floor(s/60)+' мин '+(s%60)+' с';
 const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
@@ -504,8 +519,8 @@ function say(text,btn){
   const reset=()=>{speaking=false;$$('[data-act=say]').forEach(b=>b.textContent='🔊 Прослушать')};
   if(speaking||!text){if(tts)tts.stop().catch(()=>{});else try{speechSynthesis.cancel()}catch(e){}reset();return}
   speaking=true;if(btn)btn.textContent='⏹ Остановить';
-  if(tts)tts.speak(text,{language:'ru',rate:.9}).then(reset,e=>{reset();if(e&&(e.code==='not_granted'||e.code==='unavailable')){ttsOff=true;$$('[data-act=say]').forEach(b=>b.remove())}});
-  else try{const u=new SpeechSynthesisUtterance(text);u.lang='ru-RU';u.rate=.9;u.onend=u.onerror=reset;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){reset()}
+  if(tts)tts.speak(text,{language:TTS_LANG,rate:.9}).then(reset,e=>{reset();if(e&&(e.code==='not_granted'||e.code==='unavailable')){ttsOff=true;$$('[data-act=say]').forEach(b=>b.remove())}});
+  else try{const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH;u.rate=.9;u.onend=u.onerror=reset;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){reset()}
 }
 
 /* ---------- games ---------- */
@@ -605,7 +620,7 @@ function trials(c,T,limit,make){
 game('arrow','Центральная стрелка','att','Смотрите только на стрелку в середине и не отвлекайтесь на соседние.',
  'В ряду пять стрелок. Нажмите кнопку в ту сторону, куда показывает средняя. Двенадцать попыток, время ограничено.',c=>{
   const limit=[4000,3000,2200,1600,1200][c.lvl],p=[.3,.4,.5,.6,.7][c.lvl];
-  c.box.innerHTML=`<p class="hint"></p><div class="stim" aria-live="polite"></div><div class="bar"><i></i></div><div class="opts"><button data-v="L">← Влево</button><button data-v="R">Вправо →</button></div>`;
+  c.box.innerHTML=`<p class="hint"></p><div class="stim" aria-live="polite"></div><div class="bar"><i></i></div><div class="opts keep"><button data-v="L">← Влево</button><button data-v="R">Вправо →</button></div>`;
   trials(c,12,limit,(i,T)=>{
     const d=rnd(2)?'R':'L',f=Math.random()<p?(d==='R'?'L':'R'):d,ch=x=>x==='R'?'→':'←';
     $('.hint',c.box).textContent=`Попытка ${i} из ${T}`;
@@ -1027,7 +1042,7 @@ function scene(tree,extra=''){
 function calendar(st=S){
   const done=new Set((Array.isArray(st.hist)?st.hist:[]).filter(h=>h.s!=null).map(h=>dayOf(h.at))),now=Date.now();
   return `<div class="cal" role="list" aria-label="Занятия за две недели">${range(14).map(i=>{const t=now-(13-i)*864e5,d=new Date(t),on=done.has(dayOf(t));
-    return `<span role="listitem" class="${on?'on':''}${i===13?' now':''}" aria-label="${dm(t)}: ${on?'занятие было':'без занятий'}"><small>${d.toLocaleDateString('ru',{weekday:'short'})}</small>${d.getDate()}<i>${on?'✓':'&nbsp;'}</i></span>`}).join('')}</div>`;
+    return `<span role="listitem" class="${on?'on':''}${i===13?' now':''}" aria-label="${dm(t)}: ${on?'занятие было':'без занятий'}"><small>${d.toLocaleDateString(LOC,{weekday:'short'})}</small>${d.getDate()}<i>${on?'✓':'&nbsp;'}</i></span>`}).join('')}</div>`;
 }
 const OKP=['Прекрасная работа! Мозг любит такие маленькие победы.','Отлично получилось. Сад стал чуть богаче.','Вы молодец. Ещё одно яблоко в корзину!','Замечательно! Так держать, шаг за шагом.'];
 const NOP=['Ничего страшного. Каждая попытка тоже тренировка.','Сегодня было непросто, и это нормально. Попробуем ещё раз?','Главное, что вы занимаетесь. Яблоко подрастёт в следующий раз.'];

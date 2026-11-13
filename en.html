@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroGarden 2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&family=Yeseva+One&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one calm warm column; the living scene is the only loud element, cards stay quiet. */
+:root{
+  --bg:#f7f1e3; --card:#fffdf6; --ink:#2a2418; --mut:#655c4b; --line:#e3d9c2;
+  --leaf:#2f7d4f; --onleaf:#ffffff; --apple:#c8372d; --sun:#f0a92b;
+  --sky1:#bfe3f2; --sky2:#fdf3d6; --soil:#a9c77f; --ok:#2f7d4f;
+  --t-mem:#fbe3d6; --t-att:#fdeebb; --t-log:#d9ecf7; --t-spa:#e2f0d4;
+  --display:"Yeseva One", Georgia, "Times New Roman", serif;
+  --body:"Onest", "Segoe UI", Roboto, Arial, sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17150f; --card:#221f17; --ink:#f1eadb; --mut:#b8ae9a; --line:#3b3629;
+  --leaf:#6cc48c; --onleaf:#10200f; --apple:#ef6a5e; --sun:#f2c14e;
+  --sky1:#1b2f3d; --sky2:#2a2a22; --soil:#34502f; --ok:#6cc48c;
+  --t-mem:#4a2f25; --t-att:#4a4020; --t-log:#223a48; --t-spa:#2d4027; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#17150f; --card:#221f17; --ink:#f1eadb; --mut:#b8ae9a; --line:#3b3629;
+  --leaf:#6cc48c; --onleaf:#10200f; --apple:#ef6a5e; --sun:#f2c14e;
+  --sky1:#1b2f3d; --sky2:#2a2a22; --soil:#34502f; --ok:#6cc48c;
+  --t-mem:#4a2f25; --t-att:#4a4020; --t-log:#223a48; --t-spa:#2d4027; color-scheme:dark;}
+*{box-sizing:border-box}
+html{font-size:19px}
+html.big{font-size:23px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.5}
+h1,h2,h3{font-family:var(--display);font-weight:400;text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:1.5rem} h2{font-size:1.35rem} h3{font-size:1.1rem}
+p{margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px}
+header.top{padding:14px 0 6px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.mut{color:var(--mut)} .small{font-size:.85rem}
+nav{display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;scrollbar-width:none}
+nav a{flex:none;padding:9px 14px;border-radius:999px;text-decoration:none;color:var(--ink);border:1.5px solid var(--line);background:var(--card);font-weight:500;font-size:.9rem}
+nav a[aria-current="page"]{background:var(--leaf);color:var(--onleaf);border-color:var(--leaf)}
+main{display:flex;flex-direction:column;gap:16px;padding-bottom:32px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px}
+button,.btn{font:inherit;font-weight:500;min-height:48px;padding:10px 18px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.pri{background:var(--leaf);color:var(--onleaf);border-color:var(--leaf)}
+button.danger{border-color:var(--apple);color:var(--apple)}
+button:disabled{opacity:.55;cursor:default}
+:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+input[type=text],select{font:inherit;min-height:48px;padding:8px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);max-width:100%}
+label{font-weight:500}
+.scene{border-radius:18px;background:linear-gradient(var(--sky1),var(--sky2) 70%);position:relative;overflow:hidden;display:flex;justify-content:center;padding:10px 0 0;border:1.5px solid var(--line)}
+.scene::before{content:"";position:absolute;right:9%;top:16px;width:54px;height:54px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 14px color-mix(in srgb,var(--sun) 22%,transparent)}
+.scene svg{width:min(100%,340px);height:auto;position:relative}
+svg .crown{transform-origin:100px 205px;animation:sway 5s ease-in-out infinite alternate}
+svg .apple{cursor:pointer}
+svg .apple.new{animation:pop .9s ease-out}
+@keyframes sway{from{transform:rotate(-1.3deg)}to{transform:rotate(1.3deg)}}
+@keyframes pop{0%{transform:scale(.1)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
+svg .apple{transform-box:fill-box;transform-origin:center}
+.still svg .crown,.still svg .apple.new,.still .glow{animation:none}
+@media (prefers-reduced-motion:reduce){svg .crown,svg .apple.new,.glow{animation:none}}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.tile{background:var(--bg);border-radius:14px;padding:12px}
+.tile b{display:block;font-family:var(--display);font-weight:400;font-size:1.5rem;font-variant-numeric:tabular-nums}
+.tile span{color:var(--mut);font-size:.85rem}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px;border-radius:14px;background:var(--bg);flex-wrap:wrap}
+.item>div{flex:1 1 200px;min-width:0}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.8rem;border:1.5px solid var(--line);white-space:nowrap}
+.pill.on{border-color:var(--ok);color:var(--ok)} .pill.play{background:var(--apple);border-color:var(--apple);color:#fff}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{min-width:48px;padding:8px 12px}
+.chips button[aria-pressed="true"]{background:var(--leaf);color:var(--onleaf);border-color:var(--leaf)}
+.hint{font-weight:500;min-height:1.5em}
+.grid{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:8px;width:min(100%,calc(var(--n)*78px));margin:0 auto}
+.cell{aspect-ratio:1;min-height:0;padding:0;border-radius:12px;font-size:1.15rem;font-weight:700;position:relative}
+.cell.on{background:var(--leaf);border-color:var(--leaf);color:var(--onleaf)}
+.cell.pick{border-color:var(--ink);border-width:3px}
+.cell.done{opacity:.35}
+.good{outline:4px solid var(--ok)} .bad{outline:4px solid var(--apple)}
+.cell.good::after{content:"✓"} .cell.bad::after{content:"✕"}
+.pad{aspect-ratio:1;border-radius:50%;min-height:0;padding:0;background:color-mix(in srgb,var(--leaf) 22%,var(--card))}
+.pad.lit{background:var(--sun);border-color:var(--sun);transform:scale(1.06)}
+.emo{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;font-size:2.2rem;min-height:3.4rem}
+.opts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.opts button{font-size:1.15rem}
+.opts.emoji button{font-size:2rem}
+.stim{background:#17211b;border-radius:16px;padding:26px 10px;text-align:center;font-size:2.4rem;font-weight:700;letter-spacing:.06em;color:#f2f6f2;min-height:5.2rem}
+.bar{height:8px;border-radius:8px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--leaf);width:100%}
+.jugs{display:flex;gap:28px;justify-content:center;align-items:flex-end}
+.jug{width:92px;border:3px solid var(--ink);border-top:none;border-radius:0 0 14px 14px;position:relative;overflow:hidden;background:var(--bg)}
+.jug i{position:absolute;left:0;right:0;bottom:0;background:#4aa3d8;transition:height .35s}
+.still .jug i{transition:none}
+.jugcap{text-align:center;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums}
+.mini{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:3px;width:calc(var(--n)*26px);margin:0 auto}
+.mini i{aspect-ratio:1;border-radius:4px;background:var(--line)}
+.mini i.f{background:var(--leaf)}
+.mirror{display:flex;gap:14px;justify-content:center;align-items:center}
+.mirror .axis{align-self:stretch;border-left:3px dashed var(--mut)}
+.mirror .q{font-family:var(--display);font-size:2rem;width:78px;text-align:center}
+.trees{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.tcard{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px;border-radius:16px;background:linear-gradient(var(--sky1),var(--sky2));border:1.5px solid var(--line);min-height:0;text-align:center;color:var(--ink)}
+.tcard svg{width:100%;height:auto}
+.tcard b{font-weight:700;overflow-wrap:anywhere}
+.tcard.glow{border-color:var(--sun);box-shadow:0 0 0 4px color-mix(in srgb,var(--sun) 45%,transparent);animation:glow 1.6s ease-in-out infinite alternate}
+.tcard[aria-pressed="true"]{border-color:var(--ink)}
+@keyframes glow{to{box-shadow:0 0 0 9px color-mix(in srgb,var(--sun) 22%,transparent)}}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+th{color:var(--mut);font-weight:500}
+.note{border-left:4px solid var(--sun);padding:8px 12px;background:var(--bg);border-radius:0 12px 12px 0}
+fieldset{border:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.radio{display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:14px;background:var(--bg)}
+.radio input{width:22px;height:22px;margin-top:3px;flex:none}
+footer{color:var(--mut);font-size:.85rem;padding:0 0 28px}
+
+.scene{align-items:flex-end;min-height:330px;padding:44px 0 0}
+.scene::before{display:none}
+.scene svg{width:min(78%,300px)}
+.scene svg.back{position:absolute;inset:0;width:100%;height:100%}
+.cloud g{animation:drift 18s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translateX(26px)}}
+.still .cloud g{animation:none}
+@media (prefers-reduced-motion:reduce){.cloud g{animation:none}}
+.illo{width:72px;height:72px;flex:none;border-radius:18px;padding:5px;background:var(--t-mem)}
+.illo.att{background:var(--t-att)} .illo.log{background:var(--t-log)} .illo.spa{background:var(--t-spa)}
+.illo.xl{width:104px;height:104px}
+.item>.illo+div{flex:1 1 150px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal span{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 0;border-radius:12px;background:var(--bg);font-weight:700;font-variant-numeric:tabular-nums;min-height:66px;line-height:1.2}
+.cal small{font-weight:400;color:var(--mut);font-size:.7rem}
+.cal i{font-style:normal;font-size:.8rem}
+.cal .on{background:var(--leaf);color:var(--onleaf)} .cal .on small{color:inherit}
+.cal .now{outline:3px solid var(--sun);outline-offset:1px}
+.word{padding:12px 14px;border-radius:16px 16px 16px 4px;background:var(--bg);display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.word p{flex:1 1 200px;overflow-wrap:anywhere}
+.word button{min-height:40px;padding:6px 12px;font-size:.85rem}
+#word{flex:1 1 220px}
+
+.scene svg.tree{width:min(88%,350px)}
+svg.tree .crown{transform-origin:120px 232px}
+svg.tree [data-act]{cursor:pointer}
+.crown.shake{animation:shake .65s}
+@keyframes shake{20%{transform:rotate(-3.5deg)}50%{transform:rotate(3.5deg)}80%{transform:rotate(-2deg)}}
+.apple.pulse{animation:pulse 1s ease-in-out infinite alternate}
+@keyframes pulse{to{transform:scale(1.25)}}
+.apple .unripe{animation:ripen 2.4s ease-out forwards}
+@keyframes ripen{to{opacity:0}}
+.bird{transform-box:fill-box;transform-origin:center bottom;animation:bob 1.3s ease-in-out infinite alternate}
+@keyframes bob{to{transform:translateY(-2.5px) rotate(-5deg)}}
+.fly{animation:flutter 8s ease-in-out infinite alternate}
+@keyframes flutter{25%{transform:translate(14px,-18px)}50%{transform:translate(-8px,-30px)}75%{transform:translate(18px,-8px)}100%{transform:translate(0,-14px)}}
+.fall{position:absolute;top:32%;width:14px;height:8px;border-radius:0 80% 0 80%;background:#6fb85f;animation:fall 2.2s ease-in forwards;pointer-events:none}
+@keyframes fall{to{transform:translate(var(--dx),230px) rotate(320deg);opacity:0}}
+.drop{position:absolute;top:6%;width:3px;height:15px;border-radius:3px;background:#6db3ff;animation:rain 1s linear forwards;pointer-events:none}
+@keyframes rain{to{transform:translateY(260px);opacity:0}}
+.still .apple.pulse,.still .bird,.still .fly,.still .crown.shake,.still .apple .unripe{animation:none}
+.still .apple .unripe{opacity:0}
+@media (prefers-reduced-motion:reduce){.apple.pulse,.bird,.fly,.crown.shake,.apple .unripe{animation:none}.apple .unripe{opacity:0}}
+.bubble{position:absolute;left:5%;right:5%;top:10px;background:var(--card);color:var(--ink);border-radius:16px;padding:10px 14px;border:1.5px solid var(--line);z-index:2;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.bubble button,[data-act=say]{min-height:44px;padding:6px 14px}
+.badges .pill{font-size:.85rem;padding:6px 12px;color:var(--mut)}
+.badges .pill.got{background:var(--leaf);color:var(--onleaf);border-color:var(--leaf)}
+.cell{display:flex;align-items:center;justify-content:center}
+span.cell{border:1.5px solid var(--line);background:var(--card)}
+.cell.face{font-size:1.5rem}
+.cell.given{background:var(--bg)}
+.cell.given:disabled,.cell.on:disabled{opacity:1}
+.sud .cell:nth-child(4n+2){margin-right:8px}
+.sud .cell:nth-child(n+5):nth-child(-n+8){margin-bottom:8px}
+.emo.words span{display:flex;flex-direction:column;align-items:center;font-size:2rem;line-height:1.2}
+.emo small{font-size:.8rem}
+.field{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;font-size:1.7rem;background:var(--bg);border-radius:14px;padding:12px}
+.opts button[aria-pressed="true"]{border-color:var(--ink);border-width:3px;background:var(--t-att)}
+.opts button{display:flex;align-items:center;justify-content:center;gap:8px}
+.mini.glow i.f{background:var(--sun)}
+h3{margin-top:6px}
+
+:root{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--s1:#3987e5;--s2:#d95926;--s3:#199e70}}
+:root[data-theme="dark"]{--s1:#3987e5;--s2:#d95926;--s3:#199e70}
+.hbars{display:flex;flex-direction:column;gap:6px}
+.hb{display:grid;grid-template-columns:minmax(120px,44%) 1fr auto;gap:8px;align-items:center;font-size:.85rem}
+.hb>span:first-child{overflow-wrap:break-word;hyphens:auto}
+.hb .tr{display:block}
+.hb i{display:block;height:12px;border-radius:0 4px 4px 0;background:var(--s1)}
+.hb b{font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+.hb small{color:var(--mut);font-weight:400}
+.vbars{display:flex;gap:3px;align-items:flex-end;padding-top:4px}
+.vb{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.vb .st{display:flex;flex-direction:column-reverse;gap:2px;width:min(100%,22px)}
+.vb .st i{display:block;border-radius:4px}
+.vb .st i:not(:first-child){border-radius:2px}
+.vb .st i:last-child{border-radius:4px 4px 2px 2px}
+.vb .st i:only-child{border-radius:4px 4px 0 0}
+.vb span{font-size:.65rem;color:var(--mut);font-variant-numeric:tabular-nums}
+.vb small{font-size:.65rem;font-variant-numeric:tabular-nums;min-height:1em}
+.s1{background:var(--s1)} .s2{background:var(--s2)} .s3{background:var(--s3)}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin:0 4px 0 10px;vertical-align:-1px}
+.sw:first-child{margin-left:0}
+.breath{width:190px;height:190px;border-radius:50%;background:var(--t-spa);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:1.5rem;animation:breathe 10s ease-in-out infinite}
+@keyframes breathe{0%{transform:scale(.68)}40%{transform:scale(1)}100%{transform:scale(.68)}}
+.still .breath{animation:none}
+@media (prefers-reduced-motion:reduce){.breath{animation:none}}
+
+.top{padding:10px 0 0;font-size:.8rem;line-height:1.45;display:flex;flex-direction:column;gap:2px}
+.top p{margin:0}
+.top .langs{display:flex;gap:8px;flex-wrap:wrap;padding-top:6px}
+.top .langs a{display:inline-flex;align-items:center;min-height:40px;padding:4px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;font-weight:500}
+.top .langs a[aria-current="page"]{background:var(--leaf);color:var(--onleaf);border-color:var(--leaf)}
+[dir=rtl] .note{border-left:none;border-right:4px solid var(--sun);border-radius:12px 0 0 12px}
+[dir=rtl] .hb i{border-radius:4px 0 0 4px}
+[dir=rtl] .sw{margin:0 10px 0 4px}
+[dir=rtl] .sw:first-child{margin-right:0}
+[dir=rtl] .word{border-radius:16px 16px 4px 16px}
+[dir=rtl] th,[dir=rtl] td{text-align:right}
+[dir=rtl] .grid,[dir=rtl] .mini,[dir=rtl] .mirror,[dir=rtl] .stim,[dir=rtl] .jugs,[dir=rtl] .bar,[dir=rtl] .vbars,[dir=rtl] .keep,[dir=rtl] .scene{direction:ltr}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<radialGradient id="gRed" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ff8a70"/><stop offset=".55" stop-color="#dc3b2c"/><stop offset="1" stop-color="#9f2419"/></radialGradient>
+<radialGradient id="gGreen" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#e2f39a"/><stop offset=".55" stop-color="#a3cb45"/><stop offset="1" stop-color="#6f9a25"/></radialGradient>
+<linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
+</defs></svg>
+<div class="wrap">
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">Version 3.0</b> · updated <time datetime="2026-11-13T10:12:19+02:00">13 Nov 2026 at 10:12</time> <span class="mut">(Israel time)</span></p><p class="mut" id="prev">Previous version: 2.9 · <time datetime="2026-11-13T09:45:19+02:00">13 Nov 2026 at 09:45</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en" aria-current="page">English</a></p></div><!--/NGTOP-->
+  <header class="top">
+    <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
+      <div style="min-width:0"><h1>NeuroGarden</h1><p class="mut small">Small steps. Every day.</p></div>
+      <div class="row" style="flex:none;flex-wrap:nowrap"><button id="aplus" data-act="big" aria-pressed="false" aria-label="Large text">A+</button></div>
+    </div>
+  </header>
+  <nav id="nav" aria-label="Sections"></nav>
+  <main id="main"><section class="card"><p>Opening the garden…</p></section></main>
+  <footer>An initiative of Roman Levingard · Free, no subscription · Attention and memory practice. Not a diagnosis and not a treatment.</footer>
+</div>
+<script>
+"use strict";
+const LOC='en-GB', TTS_LANG='en', SPEECH='en-GB';
+/* ---------- optional own backend (Supabase) ----------
+   Fill in both values to let anyone play under a name without sign-in.
+   SB_KEY is the project's publishable (public) key. Used only outside Claude. See supabase.sql. */
+const SB_URL='https://yzfaysleelxddpbmowyd.supabase.co', SB_KEY='sb_publishable_l9nkMqtiYoi704wSm-wdRA_hNHLBDZj';
+let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminPass='', adminMsg='';
+async function rpc(fn,args){
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
+  try{
+    const r=await fetch(SB_URL.replace(/\/$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(args||{}),signal:ctl.signal});
+    const t=await r.text();if(!r.ok)throw{code:r.status,message:t};return t?JSON.parse(t):null;
+  }finally{clearTimeout(tm)}
+}
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rnd=n=>Math.floor(Math.random()*n);
+const range=n=>[...Array(n).keys()];
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
+const pick=(a,k)=>shuffle(a).slice(0,k);
+const dayOf=t=>new Date(t).toLocaleDateString('sv');
+const DAY=()=>dayOf(Date.now());
+const hm=t=>new Date(t).toLocaleTimeString(LOC,{hour:'2-digit',minute:'2-digit'});
+const dm=t=>new Date(t).toLocaleDateString(LOC,{day:'numeric',month:'short'});
+const when=t=>!t?'—':(dayOf(t)===DAY()?'today, '+hm(t):dm(t)+', '+hm(t));
+const dur=s=>s<60?s+' s':Math.floor(s/60)+' min '+(s%60)+' s';
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const lsSet=(k,v)=>{try{v===null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej({code:'timeout'}),ms))]);
+
+/* ---------- state ---------- */
+const blank=()=>({nick:'',style:0,hidden:false,apples:0,flowers:0,lastVisit:'',days:0,lastDay:'',sec:0,cur:null,hist:[],lv:{},seen:0,water:'',waters:0,born:0,tot:{},visits:[],dev:''});
+let S=blank(), mode='device', ready=false, db=null, user=null, room=null, uid=null, isOwner=false, accountOK=false;
+let route='garden', G=null, notice='', newApple=false, appleSel=null;
+let people=[], names={}, online=new Set(), trees=[], adminTab='live', sel=null, confirmDel=null, search='';
+let saving=false, dirty=false, lastTree='';
+let words=[], wordDraft='', hereN=0, wordMsg='';
+let tts=null, ttsOff=false, speaking=false, bubble='', cheer=null, cheerMsg='', catF='all';
+const typing=()=>document.activeElement&&['word','q','cheer','apass'].includes(document.activeElement.id);
+
+let ACC={profiles:{},active:''}, adding=false, breathT=null, REV={};
+const num=(v,d=0)=>typeof v==='number'&&isFinite(v)?v:d;
+const int=(v,lo,hi)=>Math.min(hi,Math.max(lo,Math.floor(num(v))));
+function cleanState(o){
+  const st=blank();if(!o||typeof o!=='object')return st;
+  st.nick=typeof o.nick==='string'?o.nick.slice(0,24):'';
+  st.style=int(o.style,0,3);st.hidden=o.hidden===true;
+  ['apples','flowers','days','sec','seen','waters','born'].forEach(k=>st[k]=int(o[k],0,1e15));
+  ['lastVisit','lastDay','water'].forEach(k=>st[k]=typeof o[k]==='string'?o[k].slice(0,10):'');
+  st.dev=o.dev==='phone'||o.dev==='desk'?o.dev:'';
+  const ent=h=>h&&typeof h==='object'&&typeof h.g==='string'&&typeof h.at==='number'&&isFinite(h.at)
+    ?{g:h.g.slice(0,20),l:int(h.l,0,4),at:h.at,d:int(h.d,0,86400),s:typeof h.s==='number'&&isFinite(h.s)?int(Math.round(h.s),0,100):null,ok:h.ok===true&&typeof h.s==='number'}:null;
+  st.hist=(Array.isArray(o.hist)?o.hist:[]).map(ent).filter(Boolean).slice(-150);
+  const c=o.cur;st.cur=c&&typeof c==='object'&&typeof c.g==='string'&&typeof c.at==='number'&&isFinite(c.at)?{g:c.g.slice(0,20),l:int(c.l,0,4),at:c.at}:null;
+  if(o.lv&&typeof o.lv==='object')Object.keys(o.lv).slice(0,60).forEach(k=>{if(typeof o.lv[k]==='number'&&k!=='__proto__')st.lv[k.slice(0,20)]=int(o.lv[k],0,4)});
+  if(o.tot&&typeof o.tot==='object')Object.keys(o.tot).slice(0,30).forEach(k=>{if(typeof o.tot[k]==='number'&&k!=='__proto__')st.tot[k.slice(0,20)]=int(o.tot[k],0,1e9)});
+  st.visits=(Array.isArray(o.visits)?o.visits:[]).filter(v=>typeof v==='number'&&isFinite(v)).slice(-60);
+  return st;
+}
+const cleanTree=(t,id,u)=>{t=t&&typeof t==='object'?t:{};return{id:String(id),uid:u,nick:typeof t.nick==='string'?t.nick.slice(0,24):'',style:int(t.style,0,3),apples:int(t.apples,0,1e6),flowers:int(t.flowers,0,1e6),waters:int(t.waters,0,1e6),mon:int(t.mon,0,1e6),monKey:typeof t.monKey==='string'?t.monKey.slice(0,7):''}};
+/* Two tabs saved the same name: keep every round from both and the larger counters. */
+function mergeState(loc,remRaw){
+  const rem=cleanState(remRaw),m=cleanState(loc),key=h=>h.at+'|'+h.g,seen=new Set(rem.hist.map(key)),extra=m.hist.filter(h=>!seen.has(key(h)));
+  m.hist=[...rem.hist,...extra].sort((a,b)=>a.at-b.at).slice(-150);
+  m.apples=rem.apples+extra.filter(h=>h.ok).length;m.sec=rem.sec+extra.reduce((a,h)=>a+h.d,0);
+  ['flowers','days','waters','seen'].forEach(k=>m[k]=Math.max(m[k],rem[k]));
+  Object.keys(rem.lv).forEach(k=>m.lv[k]=Math.max(m.lv[k]==null?0:m.lv[k],rem.lv[k]));
+  Object.keys(rem.tot).forEach(k=>m.tot[k]=Math.max(m.tot[k]||0,rem.tot[k]));
+  m.born=rem.born||m.born;m.visits=[...new Set([...rem.visits,...m.visits])].sort((a,b)=>a-b).slice(-60);
+  return m;
+}
+async function sbSave(k){
+  const pay=()=>{const q=ACC.profiles[k];if(!q||!q.nick)return null;const st=clone(q);st._mon=monApples(q);st._monKey=monKey();return st};
+  let r=null;
+  for(let i=0;i<3;i++){
+    const st=pay();if(!st)return;
+    r=await rpc('ng_save',{p_key:KEY,p_pid:k,p_state:st,p_rev:REV[k]==null?null:REV[k]});
+    if(!(r&&r.conflict))break;
+    REV[k]=r.rev;if(ACC.profiles[k])Object.assign(ACC.profiles[k],mergeState(ACC.profiles[k],r.state));
+  }
+  if(r&&r.gone){
+    const nm=ACC.profiles[k]?ACC.profiles[k].nick:'';delete ACC.profiles[k];delete REV[k];
+    if(ACC.active===k){const ids=Object.keys(ACC.profiles);if(ids.length)useProfile(ids[0]);else{ACC.active='';S=blank()}}
+    notice=`Name «${nm}» was removed from the garden, its tree is no longer saved.`;
+    if(!(route==='play'&&G&&G.active))render();return;
+  }
+  if(r&&r.conflict)throw{code:'conflict'};
+  if(r&&r.rev!=null)REV[k]=r.rev;applyMeta(r,k);
+}
+async function arpc(fn,args){
+  const r=await rpc(fn,Object.assign({p_pass:adminPass},args||{}));
+  if(!r||r.ok!==true)throw{code:(r&&r.error)||'error'};return r;
+}
+const clone=o=>JSON.parse(JSON.stringify(o));
+const newPid=()=>'p'+Date.now().toString(36)+rnd(1296).toString(36);
+const bump=k=>{if(!S.tot||typeof S.tot!=='object')S.tot={};S.tot[k]=(S.tot[k]||0)+1};
+const monKey=()=>DAY().slice(0,7);
+const monApples=st=>(Array.isArray(st.hist)?st.hist:[]).filter(h=>h.ok&&dayOf(h.at).slice(0,7)===monKey()).length;
+/* One stored document holds every name created on this account or device: {profiles:{id:state}, active:id}. */
+function normalize(o){
+  let pr={};
+  if(o&&o.profiles&&typeof o.profiles==='object')pr=o.profiles;else if(o&&o.nick)pr={p1:o};
+  const out={profiles:{},active:(o&&o.active)||''};
+  Object.keys(pr).filter(k=>/^[A-Za-z0-9_-]{1,40}$/.test(k)).slice(0,8).forEach(k=>{out.profiles[k]=cleanState(pr[k])});
+  return out;
+}
+function useProfile(pid){ACC.active=pid;S=ACC.profiles[pid];housekeeping();if(sbOK){lsSet('ng_active',pid);const c=cheerBy[pid];cheer=c?Object.assign({pid},c):null}}
+function applyMeta(r,pid){
+  if(!r)return;if(r.id)MY[pid]=r.id;
+  const had=JSON.stringify(cheerBy[pid]||null),c=r.cheer||null,n=+r.online||0,ch=JSON.stringify(c)!==had||n!==hereN;
+  cheerBy[pid]=c;hereN=n;
+  if(pid===ACC.active){cheer=c?Object.assign({pid},c):null;if(ch&&route==='garden'&&!adding)render()}
+}
+function heartbeat(){if(sbOK&&mode==='account'&&S.nick&&!document.hidden){const k=ACC.active;rpc('ng_ping',{p_key:KEY,p_pid:k}).then(r=>applyMeta(r,k)).catch(()=>{})}}
+async function loadCommon(){const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);trees=(Array.isArray(t)?t:[]).map(x=>cleanTree(x,x&&x.id,x&&x.id));words=(Array.isArray(w)?w:[]).filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id),text:x.text,nick:x.nick,at:num(x.at),mine:x.mine===true}))}
+async function loadAdmin(){
+  const rows=((await arpc('ng_admin_list')).rows||[]).filter(r=>r&&typeof r==='object');
+  people=rows.map(r=>Object.assign(cleanState(r.state),{id:String(r.id),uid:String(r.dev),pid:String(r.pid),seen:num(r.seen)}));
+  online=new Set(rows.filter(r=>num(r.age,1e9)<75).map(r=>String(r.id)));isOwner=true;
+}
+function sbRoute(){
+  if(!sbOK)return;
+  if(route==='common')loadCommon().then(()=>{if(route==='common'&&!typing())render()}).catch(()=>{});
+  if(route==='admin'&&adminPass)loadAdmin().then(()=>{if(route==='admin'&&!typing())render()}).catch(()=>{});
+}
+const isMine=w=>sbOK?!!w.mine:w.id===uid;
+const myTreeId=()=>sbOK?MY[ACC.active]:uid+'~'+ACC.active;
+const pres=()=>{if(room)room.presence({acc:mode==='account'&&S.nick?1:null,pid:ACC.active||null}).catch(()=>{})};
+function housekeeping(){
+  if(!S.tot||typeof S.tot!=='object')S.tot={};
+  if(S.cur){S.hist.push({g:S.cur.g,l:S.cur.l,at:S.cur.at,d:0,s:null,ok:false});S.cur=null;bump('quit')}
+  if(S.lastVisit!==DAY()){S.flowers++;S.lastVisit=DAY()}
+  S.seen=Date.now();if(!Array.isArray(S.visits))S.visits=[];S.visits.push(S.seen);if(S.visits.length>60)S.visits=S.visits.slice(-60);
+  S.dev=Math.min(screen.width||9999,innerWidth||9999)<700?'phone':'desk';
+}
+function treeDoc(){
+  const list={};
+  Object.entries(ACC.profiles).forEach(([k,q])=>{if(q.nick&&!q.hidden)list[k]={nick:q.nick,style:q.style,apples:q.apples,flowers:q.flowers,waters:q.waters||0,mon:monApples(q),monKey:monKey()}});
+  return list;
+}
+async function save(){
+  if(mode==='nosave'||!S.nick)return;
+  if(mode==='device'){lsSet('ng_state',JSON.stringify(ACC));return}
+  dirty=true;if(saving)return;saving=true;
+  while(dirty){
+    dirty=false;
+    try{
+      if(sbOK){await sbSave(ACC.active)}else{
+      await db.doc('activity/'+uid).set(clone(ACC));
+      const list=treeDoc(),t=JSON.stringify(list);
+      if(t!==lastTree){
+        if(Object.keys(list).length)await db.doc('trees/'+uid).set({list});else await db.doc('trees/'+uid).delete();
+        lastTree=t;
+      }}
+    }catch(e){
+      if(e&&e.code==='invalid_argument'){
+        mode='device';accountOK=false;lsSet('ng_mode','device');lsSet('ng_state',JSON.stringify(ACC));
+        notice='Saving to the account is not available at your access level for this page. The garden is saved on this device.';
+      }else notice='Could not save the result to the account. Check your internet connection: the next game will try again.';
+      if(route!=='play'||!G||!G.active)render();
+      break;
+    }
+  }
+  saving=false;
+}
+async function setMode(m){
+  mode=m;lsSet('ng_mode',m);lastTree='';let raw=null;
+  if(m==='account'){
+    try{if(sbOK){const rows=await rpc('ng_load',{p_key:KEY})||[];raw={profiles:{},active:lsGet('ng_active')||''};MY={};cheerBy={};REV={};rows.forEach(r=>{raw.profiles[r.pid]=r.state;MY[r.pid]=r.id;REV[r.pid]=r.rev;cheerBy[r.pid]=r.cheer||null})}
+      else{const snap=await withTimeout(db.doc('activity/'+uid).get(),10000);raw=snap.exists?clone(snap.data()):null}}
+    catch(e){mode='device';notice='Could not reach the account storage. For now the garden is saved on this device.'}
+  }
+  if(mode==='device'){try{raw=JSON.parse(lsGet('ng_state')||'null')}catch(e){raw=null}}
+  ACC=mode==='nosave'?{profiles:{g:blank()},active:'g'}:normalize(raw);
+  const ids=Object.keys(ACC.profiles);
+  if(ids.length)useProfile(ACC.profiles[ACC.active]?ACC.active:ids[0]);else{ACC.active='';S=blank()}
+  adding=false;save();pres();
+}
+async function init(){
+  const ui=JSON.parse(lsGet('ng_ui')||'{}');applyUI(ui);
+  const c=window.claude;
+  if(c&&c.use){
+    const get=n=>c.use(n).catch(()=>null);
+    [db,user,room,tts]=await Promise.all([get('db'),get('user'),get('room'),get('tts')]);
+  }
+  if(user){uid=await user.id();isOwner=await user.isOwner()}
+  if(sbOK){
+    KEY=lsGet('ng_key')||'';
+    if(KEY.length<32){const a=new Uint8Array(24);crypto.getRandomValues(a);KEY=[...a].map(x=>x.toString(16).padStart(2,'0')).join('');lsSet('ng_key',KEY)}
+    if(lsGet('ng_key')!==KEY)sbOK=false;
+    try{adminPass=sessionStorage.getItem('ng_admin')||''}catch(e){}
+  }
+  accountOK=!!(db&&uid)||sbOK;
+  let m=lsGet('ng_mode');
+  if(!['account','device','nosave'].includes(m)||(m==='account'&&!accountOK))m=accountOK?'account':'device';
+  await setMode(m);
+  if(db){
+    if(uid)db.doc('cheers/'+uid).onSnapshot(sn=>{cheer=sn.exists?sn.data():null;if(route==='garden')render()},()=>{});
+    db.collection('trees').onSnapshot(q=>{trees=q.docs.flatMap(d=>{const x=d.data()||{};return x.list&&typeof x.list==='object'?Object.entries(x.list).slice(0,8).map(([k,t])=>cleanTree(t,d.id+'~'+k,d.id)):[cleanTree(x,d.id,d.id)]});if(route==='common'&&!typing())render()},()=>{});
+    db.collection('words').onSnapshot(q=>{words=q.docs.map(d=>Object.assign({id:d.id},d.data()));if(route==='common'&&!typing())render()},()=>{});
+    if(isOwner)db.collection('activity').onSnapshot(q=>{
+      people=q.docs.flatMap(d=>{const x=d.data()||{},pr=x.profiles||(x.nick?{p1:x}:{});return Object.entries(pr).slice(0,8).map(([k,st])=>Object.assign(cleanState(st),{id:d.id+'~'+k,uid:d.id,pid:k}))});
+      if(route==='admin'&&!typing())render();
+      if(user)user.profiles([...new Set(people.map(p=>p.uid))]).then(ps=>{names=ps;if(route==='admin'&&!typing())render()});
+    },()=>{});
+  }
+  if(room)room.onPeers(ch=>{
+    const n=new Set(ch.peers.filter(p=>p.kind==='viewer').map(p=>p.by||p.peer)).size;
+    online=new Set(ch.peers.filter(p=>p.by&&p.presence&&p.presence.acc===1&&p.presence.pid).map(p=>p.by+'~'+p.presence.pid));
+    if(isOwner&&route==='admin'&&!typing())render();
+    else if(n!==hereN&&(route==='garden'||route==='common')&&!typing()){hereN=n;render()}
+    hereN=n;
+  },()=>{});
+  ready=true;render();
+  if(sbOK){setInterval(heartbeat,30000);setInterval(sbRoute,12000);sbRoute()}
+}
+function applyUI(ui){
+  document.documentElement.classList.toggle('big',!!ui.big);
+  document.documentElement.classList.toggle('still',!!ui.still);
+  $('#aplus').setAttribute('aria-pressed',ui.big?'true':'false');
+}
+const getUI=()=>{try{return JSON.parse(lsGet('ng_ui')||'{}')}catch(e){return{}}};
+
+/* ---------- tree drawing ---------- */
+const LEAF=[['#2f7a46','#4a9c58','#77c06f'],['#5e8f33','#84b04a','#aad26b'],['#236b5b','#3a917c','#66b59d'],['#b85f80','#d98aa5','#f4bccd']];
+const STYLE_NAMES=['Apple tree','Linden','Cedar','Cherry in bloom'];
+const BLOBS=[[0,-8,52,0],[-36,10,36,0],[36,10,36,0],[-22,-30,32,1],[24,-28,32,1],[0,22,34,1],[-44,-8,24,2],[46,-6,24,2],[2,-48,26,2]];
+const SLOTS=[[2,8],[-26,-6],[18,-16],[-18,28],[24,30],[-8,-34],[36,8],[-40,14],[40,-16],[-34,-24],[12,-46],[-4,-12]];
+const stage=a=>a<3?0:a<10?1:a<25?2:a<60?3:4;
+const fruitsOf=st=>(Array.isArray(st.hist)?st.hist:[]).slice(-12).map(h=>h.ok?'r':h.s==null?'b':'g');
+let gid=0;
+/* kinds: r ripe, g still green (round finished below 60%), b bitten (round not finished), p bitten and pulsing (game in progress) */
+function fruit(x,y,kind,cls,extra){
+  const id='m'+(++gid);
+  let body=`<circle cx="${x}" cy="${y}" r="7.2" fill="${kind==='g'?'url(#gGreen)':'url(#gRed)'}"/>`;
+  if(kind==='b'||kind==='p')body=`<mask id="${id}"><rect x="${x-10}" y="${y-10}" width="20" height="20" fill="#fff"/><circle cx="${x+7}" cy="${y-2}" r="4.3"/><circle cx="${x+6.4}" cy="${y+3.6}" r="3.3"/></mask><circle cx="${x}" cy="${y}" r="7.2" fill="#fff0cf"/><circle cx="${x}" cy="${y}" r="7.2" fill="url(#gRed)" mask="url(#${id})"/>`;
+  return `<g class="apple ${cls||''}${kind==='p'?' pulse':''}" ${extra||''}>${body}<ellipse cx="${x-2.6}" cy="${y-2.8}" rx="2" ry="1.4" fill="#fff" opacity=".5"/><path d="M${x} ${y-6.4}q.6-3.6 3.4-4.6" stroke="#5a3d24" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M${x+1} ${y-9}q4-3.4 7-.6q-3.6 2.6-7 .6Z" fill="#5fae4e"/>${cls==='new'&&kind==='r'?`<circle class="unripe" cx="${x}" cy="${y}" r="7.2" fill="url(#gGreen)"/>`:''}</g>`;
+}
+function treeSVG(s,o={}){
+  const st=stage(s.apples||0),k=[.6,.72,.84,.93,1][st],col=LEAF[s.style]||LEAF[0],cx=120,gy=232,cy=gy-126*k,f1=v=>v.toFixed(1);
+  const fr=o.fruits||Array(Math.min(s.apples||0,12)).fill('r'),fl=Math.min(s.flowers||0,8),bf=Math.min(s.waters||0,3);
+  let out=`<svg class="tree" viewBox="0 0 240 250" role="img" aria-label="Tree: apples ${s.apples||0}, flowers ${s.flowers||0}">`;
+  out+=`<ellipse cx="120" cy="${gy+3}" rx="106" ry="13" fill="var(--soil)"/><ellipse cx="120" cy="${gy+2}" rx="${46*k}" ry="6" fill="#000" opacity=".12"/>`;
+  for(let i=0;i<9;i++){const x=22+i*24+(i*37%11);out+=`<path d="M${x} ${gy+7}q-2-9-5-11m5 11q0-10 1-13m-1 13q3-8 6-9" stroke="#4f8f3c" stroke-width="1.6" fill="none" stroke-linecap="round"/>`}
+  for(let i=0;i<fl;i++){const x=20+i*28+(i%2)*8,y=gy+2+(i%3)*3,c=['#ffffff','#ffd6e4','#fff3b0'][i%3];
+    out+=`<path d="M${x} ${y}v9" stroke="#4d8f3f" stroke-width="1.6"/><g fill="${c}">${[0,72,144,216,288].map(a=>`<ellipse cx="${x}" cy="${y-4}" rx="2.6" ry="4" transform="rotate(${a} ${x} ${y})"/>`).join('')}</g><circle cx="${x}" cy="${y}" r="2.4" fill="#f0a92b"/>`}
+  out+=`<g class="crown" ${o.click?'data-act="rustle"':''}>`;
+  out+=`<path d="M${f1(cx-10*k)} ${gy+2}C${f1(cx-6*k)} ${f1(gy-46*k)} ${f1(cx-6*k)} ${f1(gy-80*k)} ${f1(cx-3*k)} ${f1(cy+8*k)}L${f1(cx+3*k)} ${f1(cy+8*k)}C${f1(cx+5*k)} ${f1(gy-80*k)} ${f1(cx+7*k)} ${f1(gy-46*k)} ${f1(cx+12*k)} ${gy+2}Z" fill="url(#gTrunk)"/>`;
+  if(st>0)out+=`<g stroke="#6b4a2f" stroke-width="${f1(5*k)}" fill="none" stroke-linecap="round"><path d="M${f1(cx-2*k)} ${f1(gy-58*k)}Q${f1(cx-20*k)} ${f1(gy-80*k)} ${f1(cx-34*k)} ${f1(cy+16*k)}"/><path d="M${f1(cx+2*k)} ${f1(gy-70*k)}Q${f1(cx+20*k)} ${f1(gy-86*k)} ${f1(cx+34*k)} ${f1(cy+14*k)}"/></g>`;
+  BLOBS.slice(0,[3,5,6,8,9][st]).forEach(b=>out+=`<circle cx="${f1(cx+b[0]*k)}" cy="${f1(cy+b[1]*k)}" r="${f1(b[2]*k)}" fill="${col[b[3]]}"/>`);
+  out+=`<circle cx="${f1(cx-14*k)}" cy="${f1(cy-22*k)}" r="${f1(30*k)}" fill="#fff" opacity=".1"/>`;
+  for(let i=0;i<16;i++){const a=i*2.4,r=(14+i*29%30)*k,x=f1(cx+Math.cos(a)*r*1.1),y=f1(cy+Math.sin(a)*r-4*k);out+=`<ellipse cx="${x}" cy="${y}" rx="5" ry="2.4" fill="${col[2]}" opacity=".75" transform="rotate(${i*47%180} ${x} ${y})"/>`}
+  fr.forEach((f,i)=>{const p=SLOTS[i];out+=fruit(+f1(cx+p[0]*k),+f1(cy+p[1]*k),f,(o.fresh&&i===fr.length-1)?'new':'',o.click?`data-act="apple" data-i="${i}" tabindex="0" role="button" aria-label="Fruit ${i+1}: show the session"`:'')});
+  if(o.cur){const p=SLOTS[fr.length%12],sh=fr.length>=12;out+=fruit(+f1(cx+p[0]*k+(sh?6:0)),+f1(cy+p[1]*k-(sh?10:0)),'p','','')}
+  if(o.bird){const x=+f1(cx+38*k),y=+f1(cy-40*k);
+    out+=`<g class="bird" data-act="bird" tabindex="0" role="button" aria-label="Bird: tap to hear it say something"><path d="M${x-8} ${y}l-7-3 1.5 6Z" fill="#35506e"/><ellipse cx="${x}" cy="${y}" rx="8.5" ry="6.2" fill="#f2c14e"/><path d="M${x-7} ${y-1}q6-7 13-1q-6 5-13 1Z" fill="#4a7fb5"/><circle cx="${x+7}" cy="${y-4.5}" r="4.4" fill="#35506e"/><circle cx="${x+8.5}" cy="${y-5.3}" r="1.1" fill="#fff"/><path d="M${x+11} ${y-4.6}l4.5 1-4.5 1.8Z" fill="#e8743b"/></g>`}
+  out+='</g>';
+  [[34,150,'#f7a1c4'],[204,128,'#8fc7ff'],[190,186,'#ffd166']].slice(0,bf).forEach((b,i)=>out+=`<g class="fly" style="animation-delay:-${i*2.5}s"><g transform="translate(${b[0]} ${b[1]})"><ellipse cx="-3.2" rx="3.6" ry="5" fill="${b[2]}"/><ellipse cx="3.2" rx="3.6" ry="5" fill="${b[2]}"/><path d="M0-4.5v9" stroke="#3b3024" stroke-width="1.2"/></g></g>`);
+  return out+'</svg>';
+}
+function awards(st){
+  const h=(st.hist||[]).filter(x=>x.ok),cats=new Set(h.map(x=>GAMES[x.g]&&GAMES[x.g].cat)),gs=new Set(h.map(x=>x.g)),a=+st.apples||0,d=+st.days||0;
+  return[['First apple',a>=1],['10 apples',a>=10],['50 apples',a>=50],['3 days of practice',d>=3],['7 days of practice',d>=7],['All four areas',['mem','att','log','spa'].every(c=>cats.has(c))],['10 different games',gs.size>=10],['Level five',h.some(x=>x.l===4)],['Caring gardener',(+st.waters||0)>=5]];
+}
+const awardsHTML=st=>`<div class="chips badges">${awards(st).map(a=>`<span class="pill${a[1]?' got':''}">${a[1]?'✓ ':''}${a[0]}</span>`).join('')}</div>`;
+function gameTable(st){
+  const fin=(st.hist||[]).filter(h=>h.s!=null),lv=st.lv||{};
+  const rows=ORDER.map(id=>{const hs=fin.filter(h=>h.g===id);return hs.length?`<tr><td>${esc(gname(id))}</td><td>${hs.length}</td><td>${Math.max(...hs.map(h=>h.s))}%</td><td>${lv[id]!=null?lv[id]+1:'—'}</td></tr>`:''}).join('');
+  return rows?`<div class="scroll"><table><thead><tr><th>Exercise</th><th>Rounds</th><th>Best result</th><th>Level passed</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="mut">No finished rounds yet.</p>';
+}
+/* ---------- voice ---------- */
+const canSay=()=>!ttsOff&&(!!tts||('speechSynthesis' in window&&typeof SpeechSynthesisUtterance!=='undefined'));
+const sayBtn=t=>canSay()?`<button data-act="say" data-text="${esc(t)}">🔊 Listen</button>`:'';
+function say(text,btn){
+  const reset=()=>{speaking=false;$$('[data-act=say]').forEach(b=>b.textContent='🔊 Listen')};
+  if(speaking||!text){if(tts)tts.stop().catch(()=>{});else try{speechSynthesis.cancel()}catch(e){}reset();return}
+  speaking=true;if(btn)btn.textContent='⏹ Stop';
+  if(tts)tts.speak(text,{language:TTS_LANG,rate:.9}).then(reset,e=>{reset();if(e&&(e.code==='not_granted'||e.code==='unavailable')){ttsOff=true;$$('[data-act=say]').forEach(b=>b.remove())}});
+  else try{const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH;u.rate=.9;u.onend=u.onerror=reset;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){reset()}
+}
+
+/* ---------- games ---------- */
+const GAMES={};
+const CATS={mem:'Memory',att:'Attention',log:'Logic',spa:'Space'};
+function game(id,name,cat,desc,how,run){GAMES[id]={id,name,cat,desc,how,run}}
+
+game('leaves','Where the leaves are','mem','Remember the cells with leaves and mark them from memory.',
+ 'Green cells will appear on the board for a moment. When they go out, mark the same cells. Three rounds.',c=>{
+  const [n,k]=[[3,3],[4,4],[4,6],[5,7],[5,9]][c.lvl];let round=0,hits=0;const R=3;
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(hits/(R*k)*100),err:R*k-hits});
+    round++;const set=new Set(pick(range(n*n),k)),chosen=new Set();
+    c.box.innerHTML=`<p class="hint">Round ${round} of ${R}. Remember where the leaves are.</p><div class="grid" style="--n:${n}">${range(n*n).map(i=>`<button class="cell${set.has(i)?' on':''}" data-i="${i}" disabled aria-label="Cell ${i+1}"></button>`).join('')}</div>`;
+    c.later(()=>{
+      $('.hint',c.box).textContent=`Mark ${k} cells where the leaves were.`;
+      $$('.cell',c.box).forEach(b=>{b.classList.remove('on');b.disabled=false;b.onclick=()=>{
+        const i=+b.dataset.i;if(chosen.has(i))return;chosen.add(i);b.classList.add('pick');
+        if(chosen.size===k){
+          $$('.cell',c.box).forEach(x=>{const j=+x.dataset.i;x.disabled=true;if(set.has(j))x.classList.add('on');
+            if(chosen.has(j)){if(set.has(j)){hits++;x.classList.add('good')}else x.classList.add('bad')}});
+          c.later(next,1500);
+        }}});
+    },1300+k*300);
+  };next();
+});
+
+game('seq','Sequence','mem','Repeat the order in which the lights came on.',
+ 'The lights will come on one after another. Then tap them in the same order. Two rounds.',c=>{
+  const pads=[4,4,6,6,9][c.lvl],len=[3,4,5,6,7][c.lvl],cols=pads===4?2:3,R=2;let round=0,good=0;
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/(R*len)*100),err:R*len-good});
+    round++;const seq=range(len).map(()=>rnd(pads));let pos=0,open=false;
+    c.box.innerHTML=`<p class="hint">Round ${round} of ${R}. Watch closely.</p><div class="grid" style="--n:${cols}">${range(pads).map(i=>`<button class="pad" data-i="${i}" aria-label="Light ${i+1}"></button>`).join('')}</div>`;
+    const ps=$$('.pad',c.box);
+    const flash=(i,ms)=>{ps[i].classList.add('lit');c.later(()=>ps[i].classList.remove('lit'),ms)};
+    seq.forEach((p,i)=>c.later(()=>flash(p,450),600+i*750));
+    c.later(()=>{open=true;$('.hint',c.box).textContent='Now repeat the order.'},600+len*750);
+    ps.forEach(b=>b.onclick=()=>{
+      if(!open)return;const i=+b.dataset.i;
+      if(i===seq[pos]){good++;pos++;flash(i,200);
+        if(pos===len){open=false;$('.hint',c.box).textContent='Correct!';c.later(next,1000)}}
+      else{open=false;b.classList.add('bad');ps[seq[pos]].classList.add('good');
+        $('.hint',c.box).textContent='A different light was here, it is outlined.';c.later(next,1800)}
+    });
+  };next();
+});
+
+const POOL=['🍎','🍐','🍒','🍋','🍇','🥕','🌻','🌷','🍄','🌰','🪴','🐞','🦋','🐝','🍓','🌽'];
+game('gone','What is missing?','mem','Remember the objects and work out which one is gone.',
+ 'You will see a row of objects. Then one disappears. Choose the one that is missing. Four rounds.',c=>{
+  const n=[4,5,6,7,9][c.lvl],R=4;let round=0,good=0;
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err:R-good});
+    round++;const items=pick(POOL,n),gone=items[rnd(n)],rest=POOL.filter(x=>!items.includes(x));
+    c.box.innerHTML=`<p class="hint">Round ${round} of ${R}. Remember the objects.</p><div class="emo">${items.map(x=>`<span>${x}</span>`).join('')}</div><div id="o"></div>`;
+    c.later(()=>{
+      let left=items.filter(x=>x!==gone);if(c.lvl>=2)left=shuffle(left);
+      $('.hint',c.box).textContent='What is missing?';
+      $('.emo',c.box).innerHTML=left.map(x=>`<span>${x}</span>`).join('');
+      const opts=shuffle([gone,...pick(rest,3)]);
+      $('#o',c.box).innerHTML=`<div class="opts emoji">${opts.map(x=>`<button data-v="${x}">${x}</button>`).join('')}</div>`;
+      $$('#o button',c.box).forEach(b=>b.onclick=()=>{
+        $$('#o button',c.box).forEach(x=>{x.disabled=true;if(x.dataset.v===gone)x.classList.add('good')});
+        if(b.dataset.v===gone)good++;else b.classList.add('bad');
+        c.later(next,1200);
+      });
+    },2200+n*350);
+  };next();
+});
+
+game('schulte','Numbers in order','att','Find the numbers from 1 to the last one, calmly and accurately.',
+ 'Tap the numbers in order: 1, 2, 3 and so on. Each mistake lowers the result a little.',c=>{
+  const [cols,rows]=[[3,3],[3,4],[4,4],[4,5],[5,5]][c.lvl],N=cols*rows;let want=1,err=0;
+  c.box.innerHTML=`<p class="hint">Find number 1</p><div class="grid" style="--n:${cols}">${shuffle(range(N)).map(i=>`<button class="cell" data-v="${i+1}">${i+1}</button>`).join('')}</div>`;
+  $$('.cell',c.box).forEach(b=>b.onclick=()=>{
+    if(+b.dataset.v===want){b.classList.add('done');b.disabled=true;want++;
+      if(want>N)return c.done({score:Math.max(0,100-err*8),err});
+      $('.hint',c.box).textContent='Find number '+want;
+    }else{err++;b.classList.add('bad');c.later(()=>b.classList.remove('bad'),350)}
+  });
+});
+
+function trials(c,T,limit,make){
+  let i=0,good=0,lock=false,tm=null;
+  const next=()=>{
+    if(i===T)return c.done({score:Math.round(good/T*100),err:T-good});
+    i++;lock=false;const t=make(i,T);
+    const bar=$('.bar i',c.box);
+    if(bar){bar.style.transition='none';bar.style.width='100%';void bar.offsetWidth;bar.style.transition=`width ${limit}ms linear`;bar.style.width='0%'}
+    clearTimeout(tm);tm=setTimeout(()=>{if(!lock)t.answer(null)},limit);
+    t.answer=v=>{if(lock)return;lock=true;clearTimeout(tm);const ok=v===t.right;if(ok)good++;t.show(ok,v);c.later(next,ok?450:1100)};
+    t.bind(v=>t.answer(v));
+  };
+  c.stop=()=>clearTimeout(tm);next();
+}
+game('arrow','Middle arrow','att','Look only at the arrow in the middle and ignore its neighbours.',
+ 'There are five arrows in a row. Press the button for the direction the middle one points to. Twelve tries, time is limited.',c=>{
+  const limit=[4000,3000,2200,1600,1200][c.lvl],p=[.3,.4,.5,.6,.7][c.lvl];
+  c.box.innerHTML=`<p class="hint"></p><div class="stim" aria-live="polite"></div><div class="bar"><i></i></div><div class="opts keep"><button data-v="L">← Left</button><button data-v="R">Right →</button></div>`;
+  trials(c,12,limit,(i,T)=>{
+    const d=rnd(2)?'R':'L',f=Math.random()<p?(d==='R'?'L':'R'):d,ch=x=>x==='R'?'→':'←';
+    $('.hint',c.box).textContent=`Try ${i} of ${T}`;
+    $('.stim',c.box).textContent=ch(f)+ch(f)+ch(d)+ch(f)+ch(f);
+    $$('.opts button',c.box).forEach(b=>b.classList.remove('good','bad'));
+    return{right:d,bind(ans){$$('.opts button',c.box).forEach(b=>b.onclick=()=>ans(b.dataset.v));
+        document.onkeydown=e=>{if(e.key==='ArrowLeft')ans('L');if(e.key==='ArrowRight')ans('R')}},
+      show(ok,v){$$('.opts button',c.box).forEach(b=>{if(b.dataset.v===d)b.classList.add('good');else if(b.dataset.v===v)b.classList.add('bad')});
+        if(v===null)$('.hint',c.box).textContent='Time is up. The correct answer is outlined.'}};
+  });
+});
+
+const INK=[['red','#ff6b5e'],['blue','#6db3ff'],['green','#5fd68a'],['yellow','#ffd84d'],['purple','#c89bff']];
+game('color','Colour and word','att','Name the colour of the letters, not what the word says.',
+ 'A word will appear on a dark plate. Choose the colour it is written in. The word itself may name a different colour. Ten tries.',c=>{
+  const k=[3,3,4,4,5][c.lvl],limit=[6000,5000,4000,3000,2200][c.lvl],p=[.3,.5,.7,.85,1][c.lvl],set=INK.slice(0,k);
+  c.box.innerHTML=`<p class="hint"></p><div class="stim" aria-live="polite"></div><div class="bar"><i></i></div><div class="opts">${set.map((x,i)=>`<button data-v="${i}">${x[0]}</button>`).join('')}</div>`;
+  trials(c,10,limit,(i,T)=>{
+    const ink=rnd(k);let w=ink;if(Math.random()<p)while(w===ink)w=rnd(k);
+    $('.hint',c.box).textContent=`Try ${i} of ${T}. What colour is it written in?`;
+    const s=$('.stim',c.box);s.textContent=set[w][0];s.style.color=set[ink][1];
+    $$('.opts button',c.box).forEach(b=>b.classList.remove('good','bad'));
+    return{right:ink,bind(ans){$$('.opts button',c.box).forEach(b=>b.onclick=()=>ans(+b.dataset.v))},
+      show(ok,v){$$('.opts button',c.box).forEach(b=>{if(+b.dataset.v===ink)b.classList.add('good');else if(+b.dataset.v===v)b.classList.add('bad')})}};
+  });
+});
+
+function mkSeries(l){
+  const a=1+rnd(9);let seq,rule;const gen=f=>range(6).map(f);
+  if(l===0){const d=2+rnd(4);seq=gen(i=>a+d*i);rule=`each number is ${d} more than the one before`}
+  else if(l===1){const d=3+rnd(7),s=60+rnd(30);seq=gen(i=>s-d*i);rule=`each number is ${d} less than the one before`}
+  else if(l===2){if(rnd(2)){const m=2+rnd(2),b=1+rnd(4);seq=gen(i=>b*m**i);rule=`each number is ${m} times the one before`}
+    else{const p=2+rnd(3),q=6+rnd(4);seq=gen(i=>a+Math.ceil(i/2)*p+Math.floor(i/2)*q);rule=`add in turn ${p} and ${q}`}}
+  else if(l===3){if(rnd(2)){seq=gen(i=>a+i*(i+1)/2);rule='add 1, then 2, then 3 and so on'}
+    else{const b=1+rnd(5);seq=gen(i=>(i+b)**2);rule=`these are squares of consecutive numbers, starting with ${b}×${b}`}}
+  else{const v=rnd(3);
+    if(v===0){seq=[a,a+1+rnd(4)];while(seq.length<6)seq.push(seq.at(-1)+seq.at(-2));rule='each number is the sum of the two before it'}
+    else if(v===1){seq=[a];while(seq.length<6)seq.push(seq.at(-1)*2+1);rule='the number is multiplied by 2, then add 1'}
+    else{seq=[a+4];while(seq.length<6)seq.push(seq.length%2?seq.at(-1)*2:seq.at(-1)-3);rule='in turn: multiply by 2, then subtract 3'}}
+  const ans=seq[5],opts=new Set([ans]);
+  for(const d of shuffle([-3,-2,-1,1,2,3,4,5,-5,10,-10])){if(opts.size===4)break;if(ans+d>0)opts.add(ans+d)}
+  return{seq:seq.slice(0,5),ans,rule,opts:shuffle([...opts])};
+}
+game('series','Number series','log','Find the rule of the series and choose the next number.',
+ 'See how the numbers change and choose the one that should come next. Five series. After a mistake we will show the rule.',c=>{
+  const R=5;let round=0,good=0;const missed=[];
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err:R-good,explain:missed.length?missed.join(' · '):''});
+    round++;const q=mkSeries(c.lvl);
+    c.box.innerHTML=`<p class="hint">Series ${round} of ${R}. Which number comes next?</p><div class="stim">${q.seq.join('  ')}  ?</div><div class="opts">${q.opts.map(x=>`<button data-v="${x}">${x}</button>`).join('')}</div><p class="note" hidden></p>`;
+    $$('.opts button',c.box).forEach(b=>b.onclick=()=>{
+      $$('.opts button',c.box).forEach(x=>{x.disabled=true;if(+x.dataset.v===q.ans)x.classList.add('good')});
+      if(+b.dataset.v===q.ans){good++;c.later(next,800)}
+      else{b.classList.add('bad');missed.push(`${q.seq.join(', ')}, ${q.ans}: ${q.rule}`);
+        const n=$('.note',c.box);n.hidden=false;n.innerHTML=`Rule: ${esc(q.rule)}. <button data-go>Next</button>`;$('[data-go]',n).onclick=next}
+    });
+  };next();
+});
+
+const WMOVES=[['Fill A',(x,y,a,b)=>[a,y]],['Fill B',(x,y,a,b)=>[x,b]],
+  ['Pour A → B',(x,y,a,b)=>{const t=Math.min(x,b-y);return[x-t,y+t]}],['Pour B → A',(x,y,a,b)=>{const t=Math.min(y,a-x);return[x+t,y-t]}],
+  ['Empty A',(x,y)=>[0,y]],['Empty B',(x,y)=>[x,0]]];
+function waterSolve(a,b,t){
+  const seen=new Map([['0,0',null]]),q=[[0,0]];
+  while(q.length){const [x,y]=q.shift();
+    if(x===t||y===t){const path=[];let k=x+','+y;while(seen.get(k)){const p=seen.get(k);path.unshift(p.name);k=p.from}return path}
+    WMOVES.forEach(([name,f])=>{const [nx,ny]=f(x,y,a,b),k=nx+','+ny;if(!seen.has(k)){seen.set(k,{name,from:x+','+y});q.push([nx,ny])}})}
+  return null;
+}
+game('water','Water garden','log','Measure the right amount of water using two watering cans.',
+ 'You can fill the cans, pour from one into the other and empty them. Get the required number of litres in either can before you run out of moves.',c=>{
+  const [a,b,t,slack]=[[3,5,1,4],[3,5,4,3],[4,7,5,3],[5,8,6,2],[7,11,6,2]][c.lvl];
+  const sol=waterSolve(a,b,t),max=sol.length+slack;let x=0,y=0,used=0;const H=l=>40+l*14;
+  c.box.innerHTML=`<p class="hint"></p><div class="jugs"><div><div class="jug" style="height:${H(a)}px"><i id="ja"></i></div><p class="jugcap" id="ca"></p></div><div><div class="jug" style="height:${H(b)}px"><i id="jb"></i></div><p class="jugcap" id="cb"></p></div></div><div class="opts">${WMOVES.map((m,i)=>`<button data-m="${i}">${m[0]}</button>`).join('')}</div>`;
+  const draw=()=>{$('#ja',c.box).style.height=(x/a*100)+'%';$('#jb',c.box).style.height=(y/b*100)+'%';
+    $('#ca',c.box).textContent=`A: ${x} of ${a} L`;$('#cb',c.box).textContent=`B: ${y} of ${b} L`;
+    $('.hint',c.box).textContent=`Measure exactly ${t} L. Moves left: ${max-used}`};
+  draw();
+  $$('.opts button',c.box).forEach(btn=>btn.onclick=()=>{
+    const [nx,ny]=WMOVES[+btn.dataset.m][1](x,y,a,b);if(nx===x&&ny===y)return;
+    x=nx;y=ny;used++;draw();
+    if(x===t||y===t){$$('.opts button',c.box).forEach(q=>q.disabled=true);
+      c.later(()=>c.done({score:Math.max(60,100-10*(used-sol.length)),err:0,explain:`Shortest way, ${sol.length} moves: ${sol.join(', ')}.`}),700)}
+    else if(used>=max){$$('.opts button',c.box).forEach(q=>q.disabled=true);
+      c.later(()=>c.done({score:0,err:1,explain:`Out of moves. One of the solutions, ${sol.length} moves: ${sol.join(', ')}.`}),500)}
+  });
+});
+
+const miniGrid=(p,n)=>`<span class="mini" style="--n:${n}">${p.map(v=>`<i class="${v?'f':''}"></i>`).join('')}</span>`;
+game('mirror','Mirror','spa','Choose how the pattern will look in a mirror.',
+ 'The pattern is on the left, the dashed line is the mirror. Choose the option that appears to the right of the mirror. Five tasks.',c=>{
+  const n=[3,3,4,4,5][c.lvl],k=[3,4,6,7,10][c.lvl],R=5;let round=0,good=0;
+  const flipH=p=>p.map((_,i)=>p[Math.floor(i/n)*n+(n-1-i%n)]);
+  const flipV=p=>p.map((_,i)=>p[(n-1-Math.floor(i/n))*n+i%n]);
+  const mut=p=>{const q=[...p],f=range(n*n).filter(i=>q[i]),e=range(n*n).filter(i=>!q[i]);q[f[rnd(f.length)]]=0;q[e[rnd(e.length)]]=1;return q};
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err:R-good});
+    round++;let p,right,opts;
+    for(let tries=0;tries<80;tries++){
+      const on=new Set(pick(range(n*n),k));p=range(n*n).map(i=>on.has(i)?1:0);right=flipH(p);
+      const cand=c.lvl>=2?[mut(right),mut(right),flipV(p),p]:[p,flipV(p),flipH(flipV(p)),mut(right)];
+      const u=new Map([[right.join(''),right]]);cand.forEach(x=>{if(u.size<4)u.set(x.join(''),x)});
+      if(u.size===4){opts=shuffle([...u.values()]);break}
+    }
+    c.box.innerHTML=`<p class="hint">Task ${round} of ${R}. What will be in the mirror?</p><div class="mirror">${miniGrid(p,n)}<span class="axis"></span><span class="q">?</span></div><div class="opts">${opts.map((o,i)=>`<button data-i="${i}" aria-label="Option ${'ABCD'[i]}">${miniGrid(o,n)}</button>`).join('')}</div>`;
+    $$('.opts button',c.box).forEach(b=>b.onclick=()=>{
+      const ok=opts[+b.dataset.i]===right;
+      $$('.opts button',c.box).forEach(x=>{x.disabled=true;if(opts[+x.dataset.i]===right)x.classList.add('good')});
+      if(ok)good++;else b.classList.add('bad');c.later(next,ok?800:1600);
+    });
+  };next();
+});
+
+/* ---------- 17 more games ---------- */
+function quiz(c,R,make){
+  let round=0,good=0;const missed=[];
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err:R-good,explain:missed.join(' · ')});
+    round++;const q=make(round);
+    c.box.innerHTML=`<p class="hint">${round} of ${R}. ${q.head}</p>${q.body||''}<div class="opts">${q.opts.map((o,i)=>`<button data-i="${i}" aria-label="Option ${i+1}">${o}</button>`).join('')}</div><p class="note" hidden></p>`;
+    $$('.opts button',c.box).forEach(b=>{if(!/<span/.test(q.opts[+b.dataset.i]))b.removeAttribute('aria-label');b.onclick=()=>{
+      $$('.opts button',c.box).forEach(x=>{x.disabled=true;if(+x.dataset.i===q.right)x.classList.add('good')});
+      if(+b.dataset.i===q.right){good++;c.later(next,800)}
+      else{b.classList.add('bad');
+        if(q.why){missed.push(q.why);const n=$('.note',c.box);n.hidden=false;n.innerHTML=esc(q.why)+' <button data-go>Next</button>';$('[data-go]',n).onclick=next}
+        else c.later(next,1600)}
+    }});
+  };next();
+}
+function numOpts(ans){const o=new Set([ans]);for(const d of shuffle([-3,-2,-1,1,2,3,4,5,-5,10,-10])){if(o.size===4)break;if(ans+d>=0)o.add(ans+d)}return shuffle([...o])}
+function tapCell(c,sel,target,onDone){
+  $$(sel,c.box).forEach(x=>x.onclick=()=>{
+    $$(sel,c.box).forEach(y=>y.disabled=true);const hit=+x.dataset.i===target;
+    $(`${sel}[data-i="${target}"]`,c.box).classList.add('good');if(!hit)x.classList.add('bad');onDone(hit)});
+}
+const mutP=p=>{const q=[...p],f=range(q.length).filter(i=>q[i]),e=range(q.length).filter(i=>!q[i]);q[f[rnd(f.length)]]=0;q[e[rnd(e.length)]]=1;return q};
+
+const GROC=[['🥛','milk'],['🍞','bread'],['🧀','cheese'],['🥚','eggs'],['🍅','tomatoes'],['🥒','cucumbers'],['🍌','bananas'],['🧅','onion'],['🥔','potatoes'],['🍯','honey'],['🧈','butter'],['🐟','fish'],['🍚','rice'],['🍋','lemon'],['☕','coffee'],['🥕','carrots']];
+game('basket','Shopping basket','mem','Remember the shopping list and find it among other goods.',
+ 'You will see a shopping list. Then, among the goods, mark only those that were on the list and press «Done». Two lists.',c=>{
+  const n=[3,4,5,6,8][c.lvl],R=2;let round=0,pts=0;
+  const next=()=>{
+    if(round===R){const p=Math.max(0,pts);return c.done({score:Math.round(p/(R*n)*100),err:R*n-p})}
+    round++;const list=pick(GROC,n),all=shuffle([...list,...pick(GROC.filter(x=>!list.includes(x)),n)]);
+    c.box.innerHTML=`<p class="hint">List ${round} of ${R}. Remember the shopping.</p><div class="emo words">${list.map(x=>`<span>${x[0]}<small>${x[1]}</small></span>`).join('')}</div>`;
+    c.later(()=>{
+      c.box.innerHTML=`<p class="hint">Mark everything that was on the list and press «Done».</p><div class="opts">${all.map((x,i)=>`<button data-i="${i}" aria-pressed="false">${x[0]} ${x[1]}</button>`).join('')}</div><button class="pri" data-ok>Done</button>`;
+      $$('.opts button',c.box).forEach(b=>b.onclick=()=>b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true'));
+      $('[data-ok]',c.box).onclick=e=>{e.target.disabled=true;
+        $$('.opts button',c.box).forEach(b=>{const inl=list.includes(all[+b.dataset.i]),sel=b.getAttribute('aria-pressed')==='true';b.disabled=true;
+          if(sel&&inl){pts++;b.classList.add('good')}else if(sel){pts--;b.classList.add('bad')}else if(inl)b.classList.add('good')});
+        $('.hint',c.box).textContent='Everything that was on the list is outlined in green.';c.later(next,2400)};
+    },2500+n*900);
+  };next();
+});
+game('pairs','Find the pair','mem','Open the cards and find matching pictures.',
+ 'The cards lie face down. Open two at a time. If the pictures match, the pair stays open. Find all the pairs in as few moves as you can.',c=>{
+  const p=[3,4,6,8,10][c.lvl],cols=[3,4,4,4,5][c.lvl],deck=shuffle(pick(POOL,p).flatMap(x=>[x,x]));let open=[],found=0,moves=0,lock=false;
+  c.box.innerHTML=`<p class="hint">Open two matching cards.</p><div class="grid" style="--n:${cols}">${deck.map((x,i)=>`<button class="cell face" data-i="${i}" aria-label="Card ${i+1}"></button>`).join('')}</div>`;
+  $$('.cell',c.box).forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.i;if(lock||open.includes(i)||b.classList.contains('on'))return;
+    b.textContent=deck[i];b.classList.add('pick');open.push(i);
+    if(open.length===2){moves++;const two=open.map(j=>$(`.cell[data-i="${j}"]`,c.box));
+      if(deck[open[0]]===deck[open[1]]){found++;two.forEach(x=>{x.classList.remove('pick');x.classList.add('on')});open=[];
+        $('.hint',c.box).textContent=`Pairs found: ${found} of ${p}`;
+        if(found===p){const extra=moves-p;c.later(()=>c.done({score:Math.max(30,100-Math.round(extra/p*25)),err:extra}),700)}}
+      else{lock=true;c.later(()=>{two.forEach(x=>{x.textContent='';x.classList.remove('pick')});open=[];lock=false},1100)}}
+  });
+});
+game('back','Backwards','mem','Remember the digits and give them from the end.',
+ 'Digits will appear one at a time. Then enter them in reverse order, starting with the last one. Three rounds.',c=>{
+  const len=[3,4,5,6,7][c.lvl],R=3;let round=0,good=0;
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/(R*len)*100),err:R*len-good});
+    round++;const d=range(len).map(()=>rnd(10)),inp=[];
+    c.box.innerHTML=`<p class="hint">Round ${round} of ${R}. Remember the digits.</p><div class="stim" aria-live="polite"></div><div id="pad"></div>`;
+    const st=$('.stim',c.box);
+    d.forEach((x,i)=>{c.later(()=>st.textContent=x,500+i*1000);c.later(()=>st.textContent='',1250+i*1000)});
+    c.later(()=>{
+      $('.hint',c.box).textContent='Enter the digits in reverse order: from the last to the first.';st.textContent='_ '.repeat(len);
+      $('#pad',c.box).innerHTML=`<div class="grid" style="--n:5">${range(10).map(i=>`<button class="cell" data-v="${i}">${i}</button>`).join('')}</div>`;
+      $$('#pad .cell',c.box).forEach(b=>b.onclick=()=>{
+        inp.push(+b.dataset.v);st.textContent=inp.join(' ')+' _'.repeat(len-inp.length);
+        if(inp.length===len){$$('#pad .cell',c.box).forEach(x=>x.disabled=true);const rev=[...d].reverse(),ok=rev.filter((x,i)=>x===inp[i]).length;good+=ok;
+          $('.hint',c.box).textContent=ok===len?'Correct!':'Correct answer: '+rev.join(' ');c.later(next,ok===len?1000:2600)}
+      });
+    },500+len*1000);
+  };next();
+});
+game('order','Picture order','mem','Remember the order the pictures stood in.',
+ 'The pictures will be shown in a row. Then they are shuffled. Tap them in the order they stood in, from left to right. Three rounds.',c=>{
+  const k=[3,4,5,6,7][c.lvl],R=3;let round=0,err=0;
+  const next=()=>{
+    if(round===R){const t=R*k;return c.done({score:Math.max(0,Math.round((t-err)/t*100)),err})}
+    round++;const items=pick(POOL,k);let pos=0;
+    c.box.innerHTML=`<p class="hint">Round ${round} of ${R}. Remember the order from left to right.</p><div class="emo">${items.map(x=>`<span>${x}</span>`).join('')}</div><div id="o"></div>`;
+    c.later(()=>{
+      $('.hint',c.box).textContent='Tap the pictures in the order they stood in.';$('.emo',c.box).innerHTML='';
+      $('#o',c.box).innerHTML=`<div class="opts emoji">${shuffle(items).map(x=>`<button data-v="${x}">${x}</button>`).join('')}</div>`;
+      $$('#o button',c.box).forEach(b=>b.onclick=()=>{
+        if(b.dataset.v===items[pos]){pos++;b.disabled=true;b.classList.add('good');$('.emo',c.box).insertAdjacentHTML('beforeend',`<span>${b.dataset.v}</span>`);if(pos===k)c.later(next,900)}
+        else{err++;b.classList.add('bad');c.later(()=>b.classList.remove('bad'),450)}
+      });
+    },1800+k*600);
+  };next();
+});
+game('count','How many apples?','att','Count the red apples among similar fruit.',
+ 'There is different fruit on the board. Count only the red apples and choose the right number. Four boards.',c=>{
+  const n=[12,16,20,25,30][c.lvl];
+  quiz(c,4,()=>{
+    const t=3+rnd(Math.min(7,Math.floor(n/3))),cells=shuffle(range(n).map(i=>i<t?'🍎':['🍏','🍐','🍅'][rnd(c.lvl>=2?3:2)])),o=numOpts(t);
+    return{head:'How many red apples are here?',body:`<div class="field">${cells.map(x=>`<span>${x}</span>`).join('')}</div>`,opts:o.map(String),right:o.indexOf(t),why:`The number of red apples was ${t}.`};
+  });
+});
+game('diff','Spot the difference','att','Compare two boards and find the cell that differs.',
+ 'The sample is at the top, an almost identical board is below. One cell on the lower board is different. Tap it. Four pairs of boards.',c=>{
+  const n=[3,3,4,4,5][c.lvl],pool=POOL.slice(0,[8,6,5,4,4][c.lvl]),R=4;let round=0,good=0;
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err:R-good});
+    round++;const a=range(n*n).map(()=>pool[rnd(pool.length)]),d=rnd(n*n),b=[...a];do{b[d]=pool[rnd(pool.length)]}while(b[d]===a[d]);
+    c.box.innerHTML=`<p class="hint">Pair ${round} of ${R}. This is the sample:</p><div class="grid" style="--n:${n}">${a.map(x=>`<span class="cell face">${x}</span>`).join('')}</div><p class="hint">Find the cell here that is different:</p><div class="grid" id="b" style="--n:${n}">${b.map((x,i)=>`<button class="cell face" data-i="${i}">${x}</button>`).join('')}</div>`;
+    tapCell(c,'#b .cell',d,hit=>{if(hit)good++;c.later(next,hit?900:1800)});
+  };next();
+});
+game('switch','Switching','att','The rule changes: sometimes odd or even, sometimes the size of the number.',
+ 'A question is written above the number. Sometimes you decide whether the number is even or odd, sometimes whether it is more or less than five. Watch the question. Twelve tries.',c=>{
+  const limit=[6000,5000,4000,3200,2500][c.lvl],p=[.2,.3,.45,.5,.6][c.lvl];let rule=0;
+  c.box.innerHTML=`<p class="hint"></p><div class="stim" aria-live="polite"></div><div class="bar"><i></i></div><div class="opts"><button data-v="0"></button><button data-v="1"></button></div>`;
+  trials(c,12,limit,(i,T)=>{
+    if(i>1&&Math.random()<p)rule=1-rule;
+    const d=[1,2,3,4,6,7,8,9][rnd(8)],right=rule?(d>5?1:0):(d%2?1:0),L=rule?['Less than 5','More than 5']:['Even','Odd'],bs=$$('.opts button',c.box);
+    $('.hint',c.box).textContent=`${i} of ${T}. ${rule?'Is the number more or less than five?':'Is the number even or odd?'}`;
+    $('.stim',c.box).textContent=d;bs.forEach((b,j)=>{b.textContent=L[j];b.classList.remove('good','bad')});
+    return{right,bind(ans){bs.forEach(b=>b.onclick=()=>ans(+b.dataset.v))},
+      show(ok,v){bs.forEach(b=>{if(+b.dataset.v===right)b.classList.add('good');else if(+b.dataset.v===v)b.classList.add('bad')})}};
+  });
+});
+const LOOK=[['O','Q'],['E','F'],['P','R'],['M','N'],['6','9'],['C','G'],['U','V'],['K','X']];
+game('odd','Odd sign out','att','One similar but different sign is hiding among identical ones.',
+ 'All the signs on the board are the same except one. Find it and tap it. Five boards.',c=>{
+  const n=[3,4,4,5,6][c.lvl],R=5;let round=0,good=0;
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err:R-good});
+    round++;const pr=LOOK[rnd(LOOK.length)],sw=rnd(2),d=rnd(n*n);
+    c.box.innerHTML=`<p class="hint">Board ${round} of ${R}. Find the sign that is different.</p><div class="grid" style="--n:${n}">${range(n*n).map(i=>`<button class="cell" data-i="${i}">${i===d?pr[1-sw]:pr[sw]}</button>`).join('')}</div>`;
+    tapCell(c,'.cell',d,hit=>{if(hit)good++;c.later(next,hit?800:1700)});
+  };next();
+});
+game('gonogo','Only the apple','att','Press when you see a red apple and hold back the rest of the time.',
+ 'Fruit appears one at a time. Press the button only if it is a red apple. If it is a different fruit, press nothing and wait for the next one. Fourteen fruits.',c=>{
+  const limit=[2200,1800,1500,1200,950][c.lvl],others=c.lvl>=3?['🍏','🍅','🍐','🍒']:['🍐','🍋','🍇','🥕'];
+  c.box.innerHTML=`<p class="hint"></p><div class="stim" aria-live="polite" style="font-size:3.4rem"></div><div class="bar"><i></i></div><button class="pri" data-go style="min-height:76px;font-size:1.2rem">It is an apple!</button>`;
+  trials(c,14,limit,(i,T)=>{
+    const go=Math.random()<.6,b=$('[data-go]',c.box);
+    $('.hint',c.box).textContent=`${i} of ${T}. Press only for the red apple.`;$('.stim',c.box).textContent=go?'🍎':others[rnd(others.length)];b.classList.remove('good','bad');
+    return{right:go?'go':null,bind(ans){b.onclick=()=>ans('go')},
+      show(ok,v){if(!ok){b.classList.add('bad');$('.hint',c.box).textContent=go?'That was an apple, you needed to press.':'That was not an apple, there was no need to press.'}else if(v)b.classList.add('good')}};
+  });
+});
+function mkSudoku(k){
+  const perm=shuffle([1,2,3,4]);let g=[[0,1,2,3],[2,3,0,1],[1,0,3,2],[3,2,1,0]].map(r=>r.map(v=>perm[v]));
+  if(rnd(2))[g[0],g[1]]=[g[1],g[0]];if(rnd(2))[g[2],g[3]]=[g[3],g[2]];if(rnd(2))g=[g[2],g[3],g[0],g[1]];if(rnd(2))g=g[0].map((_,c)=>g.map(r=>r[c]));
+  const sol=g.flat(),puz=[...sol];
+  const count=a=>{const i=a.indexOf(0);if(i<0)return 1;let n=0;const r=i>>2,cc=i&3;
+    for(let v=1;v<=4&&n<2;v++){let ok=true;for(let j=0;j<16;j++)if(a[j]===v&&((j>>2)===r||(j&3)===cc||((j>>3)===(r>>1)&&((j&3)>>1)===(cc>>1)))){ok=false;break}
+      if(ok){a[i]=v;n+=count(a);a[i]=0}}return n};
+  for(const i of shuffle(range(16))){if(puz.filter(v=>!v).length>=k)break;const v=puz[i];puz[i]=0;if(count([...puz])!==1)puz[i]=v}
+  return{sol,puz};
+}
+game('sudoku','Mini sudoku','log','Fill the 4 by 4 board with digits 1 to 4 without repeats.',
+ 'In every row, every column and every small square the digits 1, 2, 3 and 4 appear once each. Choose an empty cell, then a digit.',c=>{
+  const {sol,puz}=mkSudoku([4,6,8,9,10][c.lvl]),cur=[...puz];let sel=-1,err=0;
+  c.box.innerHTML=`<p class="hint">Choose an empty cell, then a digit.</p><div class="grid sud" style="--n:4">${cur.map((v,i)=>`<button class="cell${v?' given':''}" data-i="${i}" ${v?'disabled':''} aria-label="Cell ${i+1}">${v||''}</button>`).join('')}</div><div class="grid" style="--n:4">${[1,2,3,4].map(v=>`<button class="cell" data-v="${v}">${v}</button>`).join('')}</div>`;
+  const cells=$$('.sud .cell',c.box);
+  cells.forEach(b=>b.onclick=()=>{cells.forEach(x=>x.classList.remove('pick'));sel=+b.dataset.i;b.classList.add('pick')});
+  $$('[data-v]',c.box).forEach(b=>b.onclick=()=>{
+    if(sel<0||cur[sel]){$('.hint',c.box).textContent='First choose an empty cell.';return}
+    const v=+b.dataset.v,cell=cells[sel];
+    if(sol[sel]===v){cur[sel]=v;cell.textContent=v;cell.classList.remove('pick');cell.classList.add('on');cell.disabled=true;sel=-1;$('.hint',c.box).textContent='Correct. Choose the next cell.';
+      if(!cur.includes(0))c.later(()=>c.done({score:Math.max(0,100-err*12),err}),700)}
+    else{err++;cell.classList.add('bad');$('.hint',c.box).textContent='A different digit belongs here. Check the row, the column and the square.';c.later(()=>cell.classList.remove('bad'),600)}
+  });
+});
+game('equation','Find the number','log','Pick the number that makes the equation true.',
+ 'One number in the sum is replaced by a question mark. Choose the number that makes the sum correct. Five sums.',c=>quiz(c,5,()=>{
+  const l=c.lvl;let x,t;
+  if(l===0){x=1+rnd(9);const a=1+rnd(10);t=`${a} + ? = ${a+x}`}
+  else if(l===1){x=2+rnd(18);const a=x+5+rnd(25);t=rnd(2)?`${a} − ? = ${a-x}`:`? + ${a} = ${a+x}`}
+  else if(l===2){x=2+rnd(8);const a=2+rnd(8);t=rnd(2)?`${a} × ? = ${a*x}`:`? × ${a} = ${a*x}`}
+  else if(l===3){x=2+rnd(8);const a=2+rnd(8),b=1+rnd(9);t=rnd(2)?`${a*x} : ? = ${a}`:`${a} × ? + ${b} = ${a*x+b}`}
+  else{x=2+rnd(9);const a=2+rnd(6),b=1+rnd(9);t=rnd(2)?`${a} × ? − ${b} = ${a*x-b}`:`(? + ${b}) × ${a} = ${(x+b)*a}`}
+  const o=numOpts(x);
+  return{head:'Which number stands in place of the question mark?',body:`<div class="stim">${t}</div>`,opts:o.map(String),right:o.indexOf(x),why:`Answer: ${x}. Check: ${t.replace('?',x)}.`};
+}));
+const ANA=[
+ [['Bird','nest','Bee','hive','burrow','den','tree hollow'],['Day','night','Summer','winter','autumn','heat','morning'],['Hand','glove','Foot','sock','hat','scarf','belt'],['Cow','milk','Hen','egg','feather','grain','wool'],['Eye','see','Ear','hear','speak','smell','think']],
+ [['Doctor','hospital','Teacher','school','book','lesson','pupil'],['Fish','water','Bird','air','nest','wing','tree'],['Bread','baker','House','builder','brick','roof','tenant'],['Clock','time','Ruler','length','centimetre','notebook','drawing'],['Knife','cut','Needle','sew','thread','fabric','button']],
+ [['Hot','cold','Tall','short','long','big','narrow'],['Writer','book','Composer','music','orchestra','grand piano','concert'],['Seed','plant','Egg','bird','nest','eggshell','feather'],['Finger','hand','Leaf','branch','root','flower','grass'],['Week','day','Year','month','century','hour','calendar']],
+ [['Ship','captain','Orchestra','conductor','violinist','spectator','sheet music'],['Hunger','food','Tiredness','rest','work','hurry','noise'],['Map','traveller','Recipe','cook','dish','kitchen','pharmacy'],['Milk','cheese','Flour','bread','grain','mill','baker'],['Barometer','pressure','Scales','weight','dial','pan','shop']],
+ [['Architect','drawing','Composer','score','orchestra','grand piano','stage'],['Cause','effect','Question','answer','problem','doubt','argument'],['Island','ocean','Oasis','desert','water','palm tree','caravan'],['Word','sentence','Note','melody','sound','violin','pause'],['Yesterday','today','Today','tomorrow','morning','week','evening']]];
+game('analogy','Word analogies','log','Find the word that relates to the third as the second relates to the first.',
+ 'The first pair of words is linked in meaning. Find a word for the third one so that the link is the same. Four tasks.',c=>{
+  const qs=pick(ANA[c.lvl],4);
+  quiz(c,4,r=>{const q=qs[r-1],o=shuffle(q.slice(3));
+    return{head:'Choose the word.',body:`<div class="note"><b>${q[0]}</b> is to <b>${q[1]}</b>, as <b>${q[2]}</b> is to…</div>`,opts:o,right:o.indexOf(q[3]),why:`${q[0]} and ${q[1]} are linked in the same way as ${q[2]} and ${q[3]}.`}});
+});
+const ODDW=[
+ [['carrots','apple','pear','plum','the other words are fruit'],['cat','rose','tulip','daisy','the other words are flowers'],['chair','boots','shoes','slippers','the other words are footwear'],['winter','Monday','Wednesday','Saturday','the other words are days of the week'],['cup','bus','tram','train','the other words are transport']],
+ [['hammer','violin','guitar','flute','the other words are musical instruments'],['river','oak','birch','pine','the other words are trees'],['perch','sparrow','robin','pigeon','the other words are birds'],['plate','shirt','skirt','coat','the other words are clothes'],['wardrobe','doctor','teacher','cook','the other words are professions']],
+ [['whale','pike','carp','perch','a whale is not a fish but a mammal'],['cucumber','cherry','raspberry','strawberry','the other words are berries'],['Volga','Baikal','Ladoga','Onega','the Volga is a river, the other words are lakes'],['square','sphere','cube','pyramid','a square is flat, the other shapes are solid'],['second','metre','kilometre','centimetre','a second measures time, the others measure length']],
+ [['spider','ant','bee','butterfly','a spider is not an insect, it has eight legs'],['Moon','Mars','Venus','Jupiter','the Moon is a satellite, the other words are planets'],['Paris','Italy','Spain','Greece','Paris is a city, the other words are countries'],['brave','quickly','slowly','loudly','«brave» describes what someone is like, the others describe how something is done'],['penguin','eagle','swallow','crane','a penguin cannot fly']],
+ [['dolphin','shark','tuna','ray','a dolphin is a mammal, the others are fish'],['sonnet','grand piano','harp','clarinet','a sonnet is a poem, the other words are instruments'],['diamond','gold','silver','copper','a diamond is not a metal'],['Pushkin','Tchaikovsky','Glinka','Rachmaninoff','Pushkin was a poet, the others were composers'],['nine','two','three','five','nine is divisible by three, the other numbers are prime']]];
+game('oddword','Odd word out','log','Three words share something in common, one does not belong.',
+ 'Read four words. Three of them are alike in meaning. Choose the one that does not fit. Four tasks.',c=>{
+  const qs=pick(ODDW[c.lvl],4);
+  quiz(c,4,r=>{const q=qs[r-1],o=shuffle(q.slice(0,4));
+    return{head:'Which word does not fit?',opts:o,right:o.indexOf(q[0]),why:`Odd word out «${q[0]}»: ${q[4]}.`}});
+});
+const NAMES=['Anna','Ben','Clara','David','Emma','Frank'];
+game('deduce','Who is taller?','log','Draw a conclusion from several statements.',
+ 'Read who is taller than whom and answer the question. Four tasks.',c=>{
+  const n=[3,3,4,4,5][c.lvl];
+  quiz(c,4,()=>{
+    const ord=pick(NAMES,n);let st=range(n-1).map(i=>c.lvl>=3&&rnd(2)?`${ord[i+1]} is shorter than ${ord[i]}.`:`${ord[i]} is taller than ${ord[i+1]}.`);if(c.lvl>=1)st=shuffle(st);
+    const kind=c.lvl>=4?rnd(3):rnd(2),ans=[ord[0],ord[n-1],ord[1]][kind],ops=shuffle(ord);
+    return{head:['Who is the tallest?','Who is the shortest?','Who is second tallest?'][kind],body:`<div class="note">${st.join('<br>')}</div>`,opts:ops,right:ops.indexOf(ans),why:`From tallest to shortest: ${ord.join(', ')}.`};
+  });
+});
+game('rotate','Turn the shape','spa','Imagine how the shape looks after a turn.',
+ 'In your mind, turn the shape a quarter turn clockwise and choose the result. Five tasks.',c=>{
+  const n=[3,3,4,4,5][c.lvl],k=[3,4,5,7,9][c.lvl];
+  const rot=p=>p.map((_,i)=>p[(n-1-i%n)*n+Math.floor(i/n)]);
+  quiz(c,5,()=>{
+    let p,right,opts;
+    for(let t=0;t<200&&!opts;t++){
+      const on=new Set(pick(range(n*n),k));p=range(n*n).map(i=>on.has(i)?1:0);right=rot(p);
+      const cand=c.lvl>=2?[mutP(right),rot(rot(p)),rot(rot(rot(p))),p,mutP(right)]:[p,rot(rot(p)),rot(rot(rot(p))),mutP(right),mutP(right)];
+      const u=new Map([[right.join(''),right]]);cand.forEach(x=>{if(u.size<4)u.set(x.join(''),x)});
+      if(u.size===4)opts=shuffle([...u.values()]);
+    }
+    return{head:'What do you get after a clockwise turn?',body:`<div class="mirror">${miniGrid(p,n)}<span class="q">↻</span></div>`,opts:opts.map(o=>miniGrid(o,n)),right:opts.indexOf(right)};
+  });
+});
+game('route','Gardener route','spa','Follow the arrows and find where the path leads.',
+ 'The gardener stands in the green cell. The arrows show the steps, one cell per arrow. Tap the cell where the gardener ends up. Four routes.',c=>{
+  const n=[4,4,5,5,6][c.lvl],steps=[3,4,5,6,8][c.lvl],R=4,D=[['↑',-1,0],['↓',1,0],['←',0,-1],['→',0,1]];let round=0,good=0;
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err:R-good});
+    round++;let r=rnd(n),cc=rnd(n);const s=r*n+cc,path=[];
+    while(path.length<steps){const d=D[rnd(4)],nr=r+d[1],nc=cc+d[2];if(nr<0||nc<0||nr>=n||nc>=n)continue;
+      const last=path[path.length-1];if(last&&last[1]+d[1]===0&&last[2]+d[2]===0)continue;path.push(d);r=nr;cc=nc}
+    c.box.innerHTML=`<p class="hint">Route ${round} of ${R}. Where will the gardener end up?</p><div class="stim">${path.map(d=>d[0]).join(' ')}</div><div class="grid" style="--n:${n}">${range(n*n).map(i=>`<button class="cell${i===s?' on':''}" data-i="${i}" aria-label="Cell ${i+1}${i===s?', start':''}">${i===s?'🧑‍🌾':''}</button>`).join('')}</div>`;
+    tapCell(c,'.cell',r*n+cc,hit=>{if(hit)good++;c.later(next,hit?900:1900)});
+  };next();
+});
+game('light','Light mosaic','log','Build a glowing pattern from see-through cards.',
+ 'The target pattern is at the top. Below are cards: when they are laid over one another, their cells add up. Choose the cards that together give exactly the target pattern and press «Check». Three tries for each pattern.',c=>{
+  const n=c.lvl<2?3:4,m=[3,4,4,5,6][c.lvl],take=[2,2,3,3,3][c.lvl],R=2,AB='ABCDEF';let round=0,pts=0,fails=0;const why=[];
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(pts/R*100),err:fails,explain:why.join(' ')});
+    round++;let cards,target,sol;
+    for(let t=0;t<200;t++){
+      cards=range(m).map(()=>{const on=new Set(pick(range(n*n),2+rnd(n===3?2:3)));return range(n*n).map(i=>on.has(i)?1:0)});
+      sol=pick(range(m),take).sort();target=range(n*n).map(i=>sol.some(j=>cards[j][i])?1:0);
+      if(range(m).filter(j=>!sol.includes(j)).every(j=>cards[j].some((v,i)=>v&&!target[i]))&&new Set(cards.map(x=>x.join(''))).size===m)break;
+    }
+    let tries=3;const selSet=new Set(),union=()=>range(n*n).map(i=>[...selSet].some(j=>cards[j][i])?1:0);
+    c.box.innerHTML=`<p class="hint">Pattern ${round} of ${R}. The target pattern is on the left, your result is on the right.</p><div class="mirror"><span class="mini glow" style="--n:${n}">${target.map(v=>`<i class="${v?'f':''}"></i>`).join('')}</span><span class="q">=</span><span id="pv">${miniGrid(union(),n)}</span></div><div class="opts">${cards.map((cd,i)=>`<button data-i="${i}" aria-pressed="false" aria-label="Card ${AB[i]}"><b>${AB[i]}</b>${miniGrid(cd,n)}</button>`).join('')}</div><button class="pri" data-ok>Check</button>`;
+    $$('.opts button',c.box).forEach(b=>b.onclick=()=>{const i=+b.dataset.i;selSet.has(i)?selSet.delete(i):selSet.add(i);b.setAttribute('aria-pressed',selSet.has(i));$('#pv',c.box).innerHTML=miniGrid(union(),n)});
+    $('[data-ok]',c.box).onclick=e=>{
+      if(union().join('')===target.join('')&&selSet.size){pts+=[.4,.7,1][tries-1];e.target.disabled=true;$('.hint',c.box).textContent='The pattern matches!';c.later(next,1100)}
+      else{tries--;
+        if(!tries){fails++;e.target.disabled=true;const a=sol.map(j=>AB[j]).join(' and ');why.push(`Pattern ${round}: the right cards are ${a}.`);$('.hint',c.box).textContent=`No tries left. The right cards are ${a}.`;c.later(next,2800)}
+        else $('.hint',c.box).textContent=`No match yet. Tries left: ${tries}.`}
+    };
+  };next();
+});
+const TRAINS2={basket:'memory for lists',pairs:'visual memory',back:'working memory',order:'memory for order',count:'attentiveness',diff:'observation',switch:'flexible attention',odd:'a sharp eye',gonogo:'self-control and reaction',sudoku:'logic',equation:'mental arithmetic',analogy:'verbal thinking',oddword:'the skill of generalising',deduce:'reasoning',rotate:'mental rotation',route:'a sense of direction',light:'the skill of combining'};
+const GL={basket:['🧺',30],pairs:['🃏',30],back:['3 2 1',18],order:['1→2→3',14],count:['🍎?',22],diff:['≠',34],switch:['⇄',34],odd:['OOQO',15],gonogo:['🍎',30],sudoku:['4×4',20],equation:['?+2',20],analogy:['A:B',20],oddword:['ABC',20],deduce:['?',34],rotate:['↻',36],route:['↱',36],light:['✦',34]};
+const BYCAT={mem:['leaves','seq','gone','basket','pairs','back','order'],att:['schulte','arrow','color','count','diff','switch','odd','gonogo'],log:['series','water','sudoku','equation','analogy','oddword','deduce','light'],spa:['mirror','rotate','route']};
+const ORDER=Object.values(BYCAT).flat();
+const BIRD=['Tweet-tweet! Glad to see you in the garden.','A walk in the fresh air is a good warm-up for the mind too.','Call someone close to you today: a chat wakes up the memory.','Try a game you have not played yet. Something new is always good.','You have already practised today. The tree can feel it!'];
+const CHEERS=['Well done, keep it up!','Glad to see you in the garden every day.','A great result this week!','Come back tomorrow, the tree is waiting for you.'];
+
+const gname=id=>Object.prototype.hasOwnProperty.call(GAMES,id)?GAMES[id].name:String(id);
+
+/* ---------- illustrations ---------- */
+const TRAINS={leaves:'visual memory',seq:'memory for order',gone:'attentiveness and memory',schulte:'quick visual search',arrow:'concentration',color:'the skill of not getting distracted',series:'logic',water:'planning several steps ahead',mirror:'spatial imagination'};
+Object.assign(TRAINS,TRAINS2);
+function illo(id,xl){
+  const L='var(--leaf)',A='var(--apple)',Y='var(--sun)',K='var(--ink)',W='var(--card)';
+  const sq=(x,y,w,f)=>`<rect x="${x}" y="${y}" width="${w}" height="${w}" rx="${w/4}" fill="${f}"/>`;
+  const tx=(x,y,sz,t)=>`<text x="${x}" y="${y}" text-anchor="middle" font-size="${sz}" font-weight="700" fill="${K}" font-family="Onest,Arial,sans-serif">${t}</text>`;
+  let b='';
+  if(id==='leaves')[1,0,0,0,1,0,1,0,0].forEach((v,i)=>b+=sq(6+i%3*18,6+Math.floor(i/3)*18,16,v?L:W));
+  else if(id==='seq'){[[20,20,W,'1'],[44,20,Y,'2'],[20,44,W,''],[44,44,W,'3']].forEach(c=>b+=`<circle cx="${c[0]}" cy="${c[1]}" r="10.5" fill="${c[2]}"/>`+tx(c[0],c[1]+4.5,12,c[3]))}
+  else if(id==='gone')b=`<circle cx="13" cy="34" r="9" fill="${A}"/><path d="M13 26q1-4 4-5" stroke="${K}" stroke-width="2" fill="none"/><circle cx="51" cy="34" r="9" fill="${Y}"/><circle cx="32" cy="34" r="9" fill="none" stroke="${K}" stroke-width="2.5" stroke-dasharray="4 4"/>`+tx(32,39.5,15,'?');
+  else if(id==='schulte')[3,1,4,2].forEach((v,i)=>{const x=8+i%2*26,y=8+Math.floor(i/2)*26;b+=sq(x,y,22,v===1?Y:W)+tx(x+11,y+16,14,v)});
+  else if(id==='arrow')b=`<g fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 32H6m5-5-5 5 5 5" stroke="${K}"/><path d="M58 32H46m5-5-5 5 5 5" stroke="${K}"/><path d="M24 32h16m-6-6 6 6-6 6" stroke="${A}"/></g>`;
+  else if(id==='color')b=`<rect x="5" y="17" width="54" height="30" rx="9" fill="#17211b"/><text x="32" y="37.5" text-anchor="middle" font-size="14" font-weight="700" fill="#ff6b5e" font-family="Onest,Arial,sans-serif">blue</text>`;
+  else if(id==='series')b=tx(13,39,17,'2')+tx(28,39,17,'4')+tx(43,39,17,'6')+`<text x="56" y="39" text-anchor="middle" font-size="17" font-weight="700" fill="${A}" font-family="Onest,Arial,sans-serif">?</text>`;
+  else if(id==='water')b=`<rect x="12" y="38" width="12" height="15" rx="2" fill="#4aa3d8"/><path d="M10 22v28a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4V22" fill="none" stroke="${K}" stroke-width="2.5" stroke-linecap="round"/><rect x="38" y="24" width="16" height="29" rx="2" fill="#4aa3d8"/><path d="M36 12v38a4 4 0 0 0 4 4h12a4 4 0 0 0 4-4V12" fill="none" stroke="${K}" stroke-width="2.5" stroke-linecap="round"/>`;
+  else if(id==='mirror')b=sq(5,14,11,L)+sq(5,27,11,L)+sq(18,27,11,L)+sq(5,40,11,W)+sq(18,14,11,W)+sq(18,40,11,W)+`<path d="M32 8v48" stroke="${K}" stroke-width="2" stroke-dasharray="4 4"/>`+sq(48,14,11,L)+sq(48,27,11,L)+sq(35,27,11,L)+sq(48,40,11,W)+sq(35,14,11,W)+sq(35,40,11,W);
+  if(!b&&GL[id])b=tx(32,32+GL[id][1]*.36,GL[id][1],GL[id][0]);
+  return `<svg class="illo ${GAMES[id].cat}${xl?' xl':''}" viewBox="0 0 64 64" aria-hidden="true">${b}</svg>`;
+}
+const tod=()=>{const h=new Date().getHours();return h>=5&&h<11?0:h>=11&&h<17?1:h>=17&&h<21?2:3};
+const HELLO=['Good morning','Good afternoon','Good evening','Good night'];
+const TOD=[{sky:['#ffd3b0','#fff1d0'],hill:['#86b866','#add18a'],orb:[70,78,'#ffb347']},
+  {sky:['#aee0f5','#f1f8dc'],hill:['#7fb85f','#a8d284'],orb:[325,58,'#ffc53d']},
+  {sky:['#f7a98a','#fde0b5'],hill:['#6a9d58','#93bb78'],orb:[330,128,'#ff8a4c']},
+  {sky:['#1c2748','#3d4878'],hill:['#2c4a3a','#3b5f49'],orb:[318,60,'#f4f0d8'],night:1}];
+function scene(tree,extra=''){
+  const t=TOD[tod()];
+  const stars=t.night?[[40,40],[92,74],[150,30],[212,62],[262,26],[366,104],[124,112],[20,96]].map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="1.7" fill="#fff"/>`).join(''):'';
+  const cloud=(x,y,k)=>`<g class="cloud" transform="translate(${x} ${y}) scale(${k})" opacity="${t.night?.22:.92}"><g fill="#fff"><ellipse rx="27" ry="11"/><ellipse cx="-14" cy="-8" rx="13" ry="10"/><ellipse cx="8" cy="-11" rx="16" ry="12"/></g></g>`;
+  return `<section class="scene" style="background:linear-gradient(${t.sky[0]},${t.sky[1]} 75%);--soil:${t.hill[0]}"><svg class="back" viewBox="0 0 400 260" preserveAspectRatio="xMidYMax slice" aria-hidden="true">${stars}<circle cx="${t.orb[0]}" cy="${t.orb[1]}" r="38" fill="${t.orb[2]}" opacity=".22"/><circle cx="${t.orb[0]}" cy="${t.orb[1]}" r="24" fill="${t.orb[2]}"/>${cloud(96,58,1)}${cloud(236,98,.72)}<path d="M0 205Q100 150 210 192T400 178V260H0Z" fill="${t.hill[1]}"/><path d="M0 234Q120 202 240 228T400 220V260H0Z" fill="${t.hill[0]}"/></svg>${tree}${extra}</section>`;
+}
+function calendar(st=S){
+  const done=new Set((Array.isArray(st.hist)?st.hist:[]).filter(h=>h.s!=null).map(h=>dayOf(h.at))),now=Date.now();
+  return `<div class="cal" role="list" aria-label="Practice over two weeks">${range(14).map(i=>{const t=now-(13-i)*864e5,d=new Date(t),on=done.has(dayOf(t));
+    return `<span role="listitem" class="${on?'on':''}${i===13?' now':''}" aria-label="${dm(t)}: ${on?'practised':'no practice'}"><small>${d.toLocaleDateString(LOC,{weekday:'short'})}</small>${d.getDate()}<i>${on?'✓':'&nbsp;'}</i></span>`}).join('')}</div>`;
+}
+const OKP=['Lovely work! The brain enjoys small wins like this.','That went well. The garden is a little richer.','Well done. One more apple for the basket!','Wonderful! Keep going, step by step.'];
+const NOP=['No harm done. Every try is practice too.','Today was not easy, and that is fine. Shall we try again?','What matters is that you practise. The apple will ripen next time.'];
+const WISHES=['Have a good day, everyone in the garden!','It is lovely to see our garden grow.','You are not alone, we practise together.','Take care and come back tomorrow.'];
+
+/* ---------- play framework ---------- */
+function openGame(id){abandon();G={g:GAMES[id],lvl:Math.min(4,S.lv[id]!=null?S.lv[id]:0),active:false,run:0,trial:false};route='play';bump('open');render();window.scrollTo(0,0)}
+function startGame(){
+  G.active=true;G.t0=Date.now();G.run++;const my=G.run,g=G.g;
+  if(speaking)say('');if(G.trial)bump('trial');else{S.cur={g:g.id,l:G.lvl,at:G.t0};bump('start')}save();
+  $('#main').innerHTML=`<section class="card"><div class="row between"><h2>${esc(g.name)}</h2><button data-act="quit">Leave the game</button></div><p class="mut">Level ${G.lvl+1} of 5</p><div id="box" class="list"></div></section>`;
+  const ctx={lvl:G.lvl,box:$('#box'),later:(f,ms)=>setTimeout(()=>{if(G&&G.run===my&&G.active)f()},ms),done:r=>{if(G&&G.run===my&&G.active){if(ctx.stop)ctx.stop();finish(r)}}};
+  G.ctx=ctx;g.run(ctx);
+}
+function markDay(){if(S.lastDay!==DAY()){S.days++;S.lastDay=DAY()}}
+function finish(r){
+  G.active=false;document.onkeydown=null;
+  const d=Math.max(1,Math.round((Date.now()-G.t0)/1000)),ok=r.score>=60,id=G.g.id;
+  if(G.trial){G.res=Object.assign({d,ok,trial:1,msg:'The practice round is over. Now you can play for real.'},r);sfx('tap');render();return}
+  S.hist.push({g:id,l:G.lvl,at:G.t0,d,s:r.score,ok});if(S.hist.length>150)S.hist=S.hist.slice(-150);
+  S.sec+=d;S.cur=null;markDay();bump('fin');
+  if(ok){S.apples++;S.lv[id]=Math.max(S.lv[id]||0,G.lvl);newApple=true;bump('ok')}
+  save();sfx(ok?'ok':'bad');G.res=Object.assign({d,ok,msg:(ok?OKP:NOP)[rnd(ok?OKP.length:NOP.length)]},r);render();
+}
+function abandon(){
+  if(G&&G.active){G.active=false;document.onkeydown=null;if(G.ctx&&G.ctx.stop)G.ctx.stop();
+    if(!G.trial){S.hist.push({g:G.g.id,l:G.lvl,at:G.t0,d:Math.round((Date.now()-G.t0)/1000),s:null,ok:false});if(S.hist.length>150)S.hist=S.hist.slice(-150);S.cur=null;bump('quit');save()}}
+  G=null;
+}
+function vBreath(){
+  return `<section class="card" style="align-items:center;text-align:center"><h2>A minute of calm breathing</h2><div class="breath"><span id="btxt">Breathe in</span></div><p id="bleft" class="mut">60 s left</p><p class="small mut">Breathe in for four seconds, out for six seconds. Breathe calmly, in whatever way is comfortable.</p><button data-act="home">Finish</button></section>`;
+}
+function vPlay(){
+  const g=G.g;
+  if(G.res){const r=G.res;
+    if(r.trial)return `<section class="card"><h2>Practice round</h2><p>${esc(r.msg)}</p><p class="mut">The result is not saved and does not affect the tree.</p>
+    <div class="tiles"><div class="tile"><b>${r.score}%</b><span>result</span></div><div class="tile"><b>${dur(r.d)}</b><span>time</span></div><div class="tile"><b>${r.err}</b><span>mistakes</span></div></div>
+    ${r.explain?`<p class="note">${esc(r.explain)}</p>`:''}
+    <div class="row"><button class="pri" data-act="real">Play for real</button><button data-act="again">Another practice round</button><button data-act="home">Back to the garden</button></div></section>`;
+    return `<section class="card"><h2>${r.ok?'The apple is ripe!':'Round finished'}</h2>
+    ${scene(treeSVG(S,{fruits:fruitsOf(S),fresh:true}))}<p>${esc(r.msg)}</p><p class="mut">${r.ok?'A new ripe apple has grown on your tree.':'The apple is still green. You can try again or choose an easier level.'}</p>
+    <div class="tiles"><div class="tile"><b>${r.score}%</b><span>result</span></div><div class="tile"><b>${dur(r.d)}</b><span>time</span></div><div class="tile"><b>${r.err}</b><span>mistakes</span></div><div class="tile"><b>${G.lvl+1} of 5</b><span>level</span></div></div>
+    ${r.explain?`<p class="note" id="expl" hidden>${esc(r.explain)}</p>`:''}
+    <div class="row"><button class="pri" data-act="again">Repeat</button>${r.ok&&G.lvl<4?'<button data-act="nextlvl">Next level</button>':''}${r.explain?'<button data-act="explain">Show the explanation</button>':''}<button data-act="home">Back to the garden</button>${sayBtn(r.msg)}</div></section>`}
+  return `<section class="card"><div class="row">${illo(g.id,1)}<div style="flex:1 1 160px"><p class="mut small">${CATS[g.cat]}</p><h2>${esc(g.name)}</h2><p class="small mut">Trains ${TRAINS[g.id]}</p></div></div><p>${esc(g.how)}</p>
+   <div><p class="small mut">Difficulty level</p><div class="chips">${range(5).map(i=>`<button data-act="lvl" data-l="${i}" aria-pressed="${i===G.lvl}">${i+1}</button>`).join('')}</div></div>
+   <div class="row"><button class="pri" data-act="start">Start</button><button data-act="trial">Practice round</button>${sayBtn(g.name+'. '+g.how)}<button data-act="home">Back to the garden</button></div><p class="small mut">A practice round is not saved and does not affect the tree. If you leave a real game before the end, a bitten apple stays on the tree.</p></section>`;
+}
+
+/* ---------- sound ---------- */
+let actx=null;
+function sfx(k){
+  if(getUI().mute)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();
+    const n=actx.currentTime;
+    (({ok:[[523,0],[659,.12],[784,.24]],bad:[[247,0],[208,.16]],pop:[[880,0],[1175,.08]],tap:[[1320,0],[1568,.07],[1320,.14]]})[k]||[]).forEach(([f,t])=>{
+      const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,n+t);g.gain.exponentialRampToValueAtTime(.08,n+t+.02);g.gain.exponentialRampToValueAtTime(.0001,n+t+.3);
+      o.connect(g);g.connect(actx.destination);o.start(n+t);o.stop(n+t+.32)});
+  }catch(e){}
+}
+function streak(st){
+  const ds=new Set((Array.isArray(st.hist)?st.hist:[]).filter(h=>h.s!=null).map(h=>dayOf(h.at)));let n=0,t=Date.now();
+  if(!ds.has(dayOf(t)))t-=864e5;while(ds.has(dayOf(t))){n++;t-=864e5}return n;
+}
+const PROV=['Live and learn.','Patience and work wear everything down.','Practice makes perfect.','Slow and steady wins the race.','Knowledge is light.','Constant dripping wears away the stone.','The road is made by walking.','The eyes are afraid, but the hands get it done.','Sleep on it: morning is wiser than evening.','A kind word is pleasant even to a cat.'];
+
+/* ---------- admin analytics ---------- */
+function hbars(rows,unit=''){
+  const mx=Math.max(1,...rows.map(r=>r[1]));
+  return `<div class="hbars">${rows.map(r=>`<div class="hb" title="${esc(r[0])}: ${r[1]}${unit}"><span>${esc(r[0])}</span><span class="tr"><i style="width:${r[1]?Math.max(2,r[1]/mx*100):0}%"></i></span><b>${r[1]}${unit}${r[2]?` <small>${esc(r[2])}</small>`:''}</b></div>`).join('')}</div>`;
+}
+function vbars(cols,h=110){
+  const mx=Math.max(1,...cols.map(c=>c.parts.reduce((a,b)=>a+b,0)));
+  return `<div class="vbars">${cols.map(c=>{const t=c.parts.reduce((a,b)=>a+b,0);return `<div class="vb" title="${esc(c.tip)}"><small>${t||''}</small><div class="st">${c.parts.map((v,i)=>v?`<i class="s${i+1}" style="height:${Math.max(3,v/mx*h).toFixed(0)}px"></i>`:'').join('')}</div><span>${c.label}</span></div>`}).join('')}</div>`;
+}
+function vStats(){
+  const P=people,now=Date.now(),D=864e5,hs=p=>Array.isArray(p.hist)?p.hist:[];
+  if(!P.length)return '<p class="mut">There are no trees yet. Statistics will appear after the first sessions.</p>';
+  const H=P.flatMap(p=>hs(p).map(h=>({p,h}))),fin=H.filter(x=>x.h.s!=null),ok=H.filter(x=>x.h.ok),quit=H.filter(x=>x.h.s==null);
+  const pct=(a,b)=>b?Math.round(a/b*100):0,nm=p=>p.nick||'No name';
+  const played=n=>P.filter(p=>hs(p).some(h=>now-h.at<n*D)).length,seenToday=P.filter(p=>p.seen&&dayOf(p.seen)===DAY()).length;
+  const playedToday=P.filter(p=>hs(p).some(h=>dayOf(h.at)===DAY())).length;
+  const tot=k=>P.reduce((a,p)=>a+((p.tot&&+p.tot[k])||0),0);
+  const tile=(v,l)=>`<div class="tile"><b>${v}</b><span>${l}</span></div>`;
+  const dayCols=f=>range(14).map(i=>{const t=now-(13-i)*D,k=dayOf(t),xs=H.filter(x=>dayOf(x.h.at)===k);return f(t,xs)});
+  const rounds=dayCols((t,xs)=>{const a=xs.filter(x=>x.h.ok).length,g=xs.filter(x=>x.h.s!=null&&!x.h.ok).length,q=xs.filter(x=>x.h.s==null).length;
+    return{label:new Date(t).getDate(),parts:[a,g,q],tip:`${dm(t)}: ripe ${a}, green ${g}, bitten ${q}`}});
+  const players=dayCols((t,xs)=>{const n=new Set(xs.map(x=>x.p.id)).size;return{label:new Date(t).getDate(),parts:[n],tip:`${dm(t)}: played: ${n} people`}});
+  const hours=range(24).map(h=>{const n=H.filter(x=>new Date(x.h.at).getHours()===h).length;return{label:h%6===0?h:'&nbsp;',parts:[n],tip:`${h}:00–${h}:59: rounds ${n}`}});
+  const wd=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((n,i)=>[n,H.filter(x=>(new Date(x.h.at).getDay()+6)%7===i).length]);
+  const gm=ORDER.map(id=>{const xs=H.filter(x=>x.h.g===id),f=xs.filter(x=>x.h.s!=null);
+    return{id,n:xs.length,fin:f.length,ok:xs.filter(x=>x.h.ok).length,avg:f.length?Math.round(f.reduce((a,x)=>a+x.h.s,0)/f.length):0,t:f.length?Math.round(f.reduce((a,x)=>a+(x.h.d||0),0)/f.length):0,u:new Set(xs.map(x=>x.p.id)).size}}).filter(g=>g.n).sort((a,b)=>b.n-a.n);
+  const dropped=gm.filter(g=>g.n>=3).map(g=>[gname(g.id),pct(g.n-g.fin,g.n),`${g.n-g.fin} of ${g.n}`]).filter(r=>r[1]).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const cats=Object.entries(CATS).map(([k,n])=>[n,H.filter(x=>GAMES[x.h.g]&&GAMES[x.h.g].cat===k).length]);
+  const lv=range(5).map(i=>['Level '+(i+1),H.filter(x=>x.h.l===i).length]);
+  const dd=P.map(p=>new Set(hs(p).filter(h=>h.s!=null).map(h=>dayOf(h.at))).size),ret=n=>dd.filter(v=>v>=n).length;
+  const gap=p=>Math.floor((now-(+p.seen||0))/D);
+  const sleep=P.filter(p=>gap(p)>=7).sort((a,b)=>gap(b)-gap(a)),risk=P.filter(p=>gap(p)>=3&&gap(p)<7),never=P.filter(p=>!hs(p).length);
+  const top7=P.map(p=>[nm(p),hs(p).filter(h=>h.s!=null&&now-h.at<7*D).length]).filter(r=>r[1]).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const strk=P.map(p=>[nm(p),streak(p)]).filter(r=>r[1]).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const avgT=fin.length?Math.round(fin.reduce((a,x)=>a+(x.h.d||0),0)/fin.length):0,w7=H.filter(x=>now-x.h.at<7*D).length,p7=played(7);
+  const newcomers=P.filter(p=>p.born&&now-p.born<7*D).length,st=P.map(p=>pstat(p));
+  const list=(arr,f)=>arr.length?`<div class="list">${arr.slice(0,12).map(p=>`<div class="item"><div><b>${esc(nm(p))}</b></div><span class="pill">${f(p)}</span></div>`).join('')}</div>`:'<p class="mut">No such participants.</p>';
+  return `<h3>Used or not</h3>
+  <p>${p7} of ${P.length} participants played in the last 7 days (${pct(p7,P.length)}%). Away for a week or longer: ${sleep.length}. Planted a tree and never played: ${never.length}.</p>
+  <div class="tiles">${tile(P.length,'trees in total')}${tile(st.filter(x=>x.on).length,'online now')}${tile(st.filter(x=>x.playing).length,'playing now')}${tile(seenToday,'visited today')}${tile(playedToday,'played today')}${tile(p7,'played in 7 days')}${tile(played(30),'played in 30 days')}${tile(newcomers,'new in 7 days')}</div>
+  <h3>Rounds by day, 14 days</h3>${vbars(rounds)}
+  <p class="small mut"><i class="sw s1"></i>ripe: finished successfully<i class="sw s2"></i>green: finished below 60%<i class="sw s3"></i>bitten: abandoned</p>
+  <h3>How many people played each day</h3>${vbars(players,70)}
+  <h3>Funnel</h3>${hbars([['Opened a game card',Math.max(tot('open'),H.length)],['Started a round',H.length],['Played to the end',fin.length],['Got a ripe apple',ok.length]])}
+  <p class="small mut">Card openings are counted from this update on. History keeps the last 150 rounds of each participant.</p>
+  <h3>Quality of practice</h3>
+  <div class="tiles">${tile(pct(fin.length,H.length)+'%','rounds finished')}${tile(pct(quit.length,H.length)+'%','rounds abandoned')}${tile(pct(ok.length,fin.length)+'%','successful among finished')}${tile(dur(avgT),'average round')}${tile(p7?(w7/p7).toFixed(1):'0','rounds per player per week')}${tile((dd.reduce((a,b)=>a+b,0)/P.length).toFixed(1),'days of practice on average')}</div>
+  <h3>When people play (hours of the day)</h3>${vbars(hours,70)}
+  <h3>Days of the week</h3>${hbars(wd)}
+  <h3>Exercises</h3>
+  ${gm.length?`<div class="scroll"><table><thead><tr><th>Exercise</th><th>Starts</th><th>Finished</th><th>Successful</th><th>Average result</th><th>Average time</th><th>Players</th></tr></thead><tbody>${gm.map(g=>`<tr><td>${esc(gname(g.id))}</td><td>${g.n}</td><td>${pct(g.fin,g.n)}%</td><td>${pct(g.ok,g.n)}%</td><td>${g.fin?g.avg+'%':'—'}</td><td>${g.fin?dur(g.t):'—'}</td><td>${g.u}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">No rounds yet.</p>'}
+  <p class="small mut">Never started: ${ORDER.filter(id=>!gm.some(g=>g.id===id)).map(gname).join(', ')||'no such games'}.</p>
+  <h3>Abandoned most often</h3>${dropped.length?hbars(dropped,'%'):'<p class="mut">Not enough data yet: a game needs at least three starts.</p>'}
+  <h3>Areas</h3>${hbars(cats)}
+  <h3>Difficulty levels</h3>${hbars(lv)}
+  <h3>Returning</h3>
+  <div class="tiles">${tile(ret(2),'played on 2 days or more')}${tile(ret(3),'played on 3 days or more')}${tile(ret(7),'played on 7 days or more')}${tile(pct(ret(2),P.length)+'%','came back at least once')}</div>
+  <h3>Most active this week</h3>${top7.length?hbars(top7,'',''):'<p class="mut">Nobody played this week.</p>'}
+  <h3>Streaks: days in a row</h3>${strk.length?hbars(strk):'<p class="mut">No active streaks right now.</p>'}
+  <h3>Away for 7 days or longer</h3>${list(sleep,p=>p.seen?gap(p)+' d':'no data')}
+  <h3>Away for 3 to 6 days</h3>${list(risk,p=>gap(p)+' d')}
+  <h3>Planted a tree and did not play</h3>${list(never,p=>'visit: '+when(p.seen))}
+  <h3>Devices and the rest</h3>
+  ${hbars([['Phone',P.filter(p=>p.dev==='phone').length],['Computer or tablet',P.filter(p=>p.dev==='desk').length]])}
+  <div class="tiles">${tile(P.reduce((a,p)=>a+(+p.waters||0),0),'tree waterings')}${tile(tot('trial'),'practice rounds')}${tile(tot('breath'),'breathing minutes')}${tile(words.length,'kind wishes')}${tile(P.reduce((a,p)=>a+(Array.isArray(p.visits)?p.visits.length:0),0),'visits recorded')}</div>
+  <div class="row"><button data-act="csvall">Copy the whole history as CSV</button><span id="copied" class="small mut" role="status"></span></div>`;
+}
+
+/* ---------- views ---------- */
+const MODE_NAMES={account:'Account: saved in the cloud',device:'On this device',nosave:'No saving'};
+const okHist=()=>S.hist.filter(h=>h.ok);
+const doneToday=id=>S.hist.some(h=>h.ok&&h.g===id&&dayOf(h.at)===DAY());
+function todays(){const n=Math.floor(Date.now()/864e5);return Object.values(BYCAT).map(a=>a[n%a.length])}
+function plantForm(more){return `<section class="card"><h2>${more?'Add another name':'Plant your tree'}</h2><p>${more?'Each name has its own tree and its own history. Handy when several people practise on one device.':'Type a name or a nickname and start playing right away. No sign-up needed.'}</p>
+  <div class="row"><label for="nick" class="small mut" style="flex-basis:100%">Name for the tree</label><input type="text" id="nick" maxlength="24" autocomplete="nickname"><button class="pri" data-act="plant">Plant the tree</button>${more?'<button data-act="addcancel">Cancel</button>':''}</div>
+  <p class="small mut">Mode: ${MODE_NAMES[mode]}. You can change it in «Settings».</p>${sbOK&&mode==='account'?'<p class="small mut">The name, the tree and the practice results are saved on the garden server and the administrator can see them. If you do not want this, choose the «On this device» mode in the settings.</p>':''}</section>`}
+function vGarden(){
+  if(!ready)return `<section class="card"><p>Opening the garden…</p></section>`;
+  if(!S.nick&&mode!=='nosave')return (notice?`<p class="note">${esc(notice)}</p>`:'')+plantForm();
+  if(adding&&mode!=='nosave')return plantForm(true);
+  const shown=S.hist.slice(-12),tdy=S.hist.filter(h=>h.ok&&dayOf(h.at)===DAY()).length,fresh=newApple;newApple=false;
+  const played=S.hist.some(h=>h.s!=null&&dayOf(h.at)===DAY()),watered=S.water===DAY(),rec=todays();
+  let info='';
+  if(appleSel!=null&&shown[appleSel]){const h=shown[appleSel];info=`<p class="note"><b>${esc(gname(h.g))}</b> · ${when(h.at)} · level ${h.l+1} · ${h.s==null?'the game was not finished, so the apple is bitten':`${dur(h.d)} · result ${h.s}%${h.ok?'':' · the apple is still green'}`}</p>`}
+  const bub=bubble?`<div class="bubble" role="status"><span>${esc(bubble)}</span>${sayBtn(bubble)}</div>`:'';
+  return `${notice?`<p class="note">${esc(notice)}</p>`:''}
+  ${scene(treeSVG(S,{click:true,fresh,fruits:fruitsOf(S),bird:played}),bub)}
+  <div class="row"><button data-act="water" ${watered?'disabled':''}>${watered?'The tree has been watered today':'💧 Water the tree'}</button><span class="small mut">Tap the crown, an apple or the bird.</span></div>
+  ${cheer&&cheer.text&&(!cheer.pid||cheer.pid===ACC.active)?`<section class="card"><h2>Kind words for you</h2><p>Roman writes: «${esc(String(cheer.text).slice(0,140))}»</p><div class="row"><button class="pri" data-act="thanks">Thank you!</button>${sayBtn(String(cheer.text).slice(0,140))}</div></section>`:''}
+  <section class="card"><div class="row between"><h2>${HELLO[tod()]}, ${esc(S.nick||'guest')}!</h2><span class="pill">${MODE_NAMES[mode]}</span></div>
+    ${mode!=='nosave'?`<div class="chips" role="group" aria-label="Who is playing">${Object.entries(ACC.profiles).map(([k,q])=>`<button data-act="who" data-p="${k}" aria-pressed="${k===ACC.active}">${esc(q.nick)}</button>`).join('')}${Object.keys(ACC.profiles).length<8?'<button data-act="addname">+ Add a name</button>':''}</div>`:''}
+    ${hereN>1?`<p>You are not alone: also in the garden right now: ${hereN-1} people</p>`:''}
+    ${fresh?'<p>One more apple has grown in your garden today!</p>':''}${info}
+    <div class="tiles"><div class="tile"><b>${tdy}</b><span>exercises today</span></div><div class="tile"><b>${S.apples}</b><span>ripe apples</span></div><div class="tile"><b>${S.flowers}</b><span>flowers for visits</span></div><div class="tile"><b>${S.days}</b><span>days with practice</span></div><div class="tile"><b>${streak(S)}</b><span>days in a row</span></div></div>
+    <div><p class="small mut">Goal for today: 3 exercises. Done ${Math.min(tdy,3)} of 3.</p><div class="bar"><i style="width:${Math.min(100,tdy/3*100).toFixed(0)}%"></i></div></div>
+    <p class="small mut">The branches show the last 12 fruits. Red apple: round passed. Green: result below 60%. Bitten: game not finished. The bird comes on practice days, butterflies come for watering.</p></section>
+  <section class="card"><h2>My practice today</h2><p class="mut">Four short exercises: memory, attention, logic and space.</p>
+    <div class="list">${rec.map(id=>{const g=GAMES[id];return `<div class="item">${illo(id)}<div><b>${esc(g.name)}</b><br><span class="small mut">${CATS[g.cat]}${doneToday(id)?' · done today ✓':''}</span></div><button class="${doneToday(id)?'':'pri'}" data-act="open" data-g="${id}">${doneToday(id)?'Once more':'Start'}</button></div>`}).join('')}</div></section>
+  <section class="card"><h2>My two weeks</h2>${calendar()}<p class="small mut">Days with practice are marked in green. Missed days take nothing away: the tree simply waits for you.</p></section>
+  <section class="card"><h2>My awards</h2>${awardsHTML(S)}</section>
+  <section class="card"><h2>A quiet minute</h2><p>Saying of the day: «${PROV[Math.floor(Date.now()/864e5)%PROV.length]}»</p><div class="row"><button data-act="breath">A minute of calm breathing</button></div></section>`;
+}
+function vGames(){
+  const ids=ORDER.filter(id=>catF==='all'||GAMES[id].cat===catF);
+  return `<section class="card"><h2>All exercises</h2><p class="mut">26 games, five levels each.</p>
+  <div class="chips">${[['all','All'],...Object.entries(CATS)].map(c=>`<button data-act="catf" data-c="${c[0]}" aria-pressed="${catF===c[0]}">${c[1]}</button>`).join('')}</div>
+  <div class="list">${ids.map(id=>{const g=GAMES[id],l=S.lv[id];return `<div class="item">${illo(id)}<div><b>${esc(g.name)}</b><br><span class="small mut">${CATS[g.cat]} · trains ${TRAINS[id]}.${l!=null?` Level passed ${l+1}.`:''}</span></div><button class="pri" data-act="open" data-g="${id}">Play</button></div>`}).join('')}</div></section>`;
+}
+function vProgress(){
+  const fin=S.hist.filter(h=>h.s!=null);
+  const rows=ORDER.map(id=>{const hs=fin.filter(h=>h.g===id);if(!hs.length)return'';
+    return `<tr><td>${esc(gname(id))}</td><td>${hs.length}</td><td>${Math.max(...hs.map(h=>h.s))}%</td><td>${S.lv[id]!=null?S.lv[id]+1:'—'}</td></tr>`}).join('');
+  return `<section class="card"><h2>My progress</h2>
+   <div class="tiles"><div class="tile"><b>${fin.length}</b><span>rounds finished</span></div><div class="tile"><b>${S.apples}</b><span>apples</span></div><div class="tile"><b>${S.days}</b><span>days with practice</span></div><div class="tile"><b>${Math.round(S.sec/60)} min</b><span>in exercises</span></div></div>
+   ${rows?`<div class="scroll"><table><thead><tr><th>Exercise</th><th>Rounds</th><th>Best result</th><th>Level passed</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="mut">Results will appear here after the first game.</p>'}</section>
+  <section class="card"><h2>Session history</h2>
+   ${S.hist.length?`<div class="list">${S.hist.slice(-30).reverse().map(h=>`<div class="item"><div><b>${esc(gname(h.g))}</b><br><span class="small mut">${when(h.at)} · level ${h.l+1}${h.d?' · '+dur(h.d):''}</span></div><span class="pill ${h.ok?'on':''}">${h.s==null?'not finished':h.s+'%'}</span></div>`).join('')}</div>`:'<p class="mut">Nothing here yet.</p>'}
+   <div class="row"><button data-act="copymine">Copy my results</button><span id="copied" class="small mut" role="status"></span></div></section>`;
+}
+function vCommon(){
+  if(!db&&!sbOK)return `<section class="card"><h2>Shared garden</h2><p>The shared garden is visible to participants who signed in to Claude and opened this page by invitation.</p></section>`;
+  const q=search.trim().toLowerCase(),list=trees.filter(t=>!q||String(t.nick||'').toLowerCase().includes(q));
+  const total=trees.reduce((a,t)=>a+(+t.apples||0),0);
+  const mk=monKey(),harv=trees.reduce((a,t)=>a+(t.monKey===mk?(+t.mon||0):0),0),goal=[50,100,250,500,1000,2500,5000,10000].find(g=>g>harv)||harv;
+  const ws=[...words].filter(w=>typeof w.text==='string'&&w.text.trim()).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,30);
+  const canWrite=mode==='account'&&S.nick;
+  return `<section class="card"><h2>Shared garden</h2><p>Trees: ${trees.length}. Apples grown in total: ${total}.${hereN>1?` In the garden now: ${hereN} people`:''}</p>
+   <div><p class="small mut">Harvest of the month: ${harv} of ${goal} apples. Everyone grows it together.</p><div class="bar"><i style="width:${Math.min(100,harv/goal*100).toFixed(0)}%"></i></div></div>
+   <div class="row"><label for="q" class="small mut">Find a tree by name</label><input type="text" id="q" value="${esc(search)}" data-in="search"></div>
+   ${list.length?`<div class="trees">${list.map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'No name')}</b><span class="small mut">${+t.apples||0} apples${t.id===myTreeId()?' · this is you':''}</span></div>`).join('')}</div>`:`<p class="mut">${trees.length?'There is no such tree.':'There are no trees in the shared garden yet. The first one will appear after the first planting.'}</p>`}
+   <p class="small mut">Only the tree name, apples and flowers are visible here. Games, results and practice times are not shown to other participants.</p></section>
+  <section class="card"><h2>Kind words</h2><p class="mut">Leave a wish for the other gardeners. Everyone has one wish and can change it.</p>
+   ${ws.length?`<div class="list">${ws.map(w=>`<div class="word"><p>${esc(w.text.slice(0,140))}<br><span class="small mut">${esc(typeof w.nick==='string'&&w.nick?w.nick.slice(0,24):'A garden participant')}${isMine(w)?' · this is you':''}</span></p>${isMine(w)||isOwner?`<button data-act="worddel" data-id="${esc(w.id)}">Remove</button>`:''}</div>`).join('')}</div>`:'<p class="mut">Nobody has written anything yet. Your wish can be the first.</p>'}
+   ${canWrite?`<div class="chips">${WISHES.map((w,i)=>`<button data-act="wish" data-i="${i}">${w}</button>`).join('')}</div>
+   <div class="row"><label for="word" class="small mut" style="flex-basis:100%">Or write in your own words</label><input type="text" id="word" maxlength="140" data-in="word" value="${esc(wordDraft)}"><button class="pri" data-act="wordsend">Leave a wish</button></div><p id="wordmsg" class="small mut" role="status">${esc(wordMsg)}</p>`:'<p class="small mut">Wishes can be written by participants in «Account» mode who have planted a tree.</p>'}</section>`;
+}
+function pstat(p){
+  const h=Array.isArray(p.hist)?p.hist:[],now=Date.now(),ok=h.filter(x=>x.ok);
+  const on=online.has(p.id),playing=on&&!!p.cur;
+  return{on,playing,today:ok.filter(x=>dayOf(x.at)===DAY()).length,week:ok.filter(x=>now-x.at<7*864e5).length,month:ok.filter(x=>now-x.at<30*864e5).length,last:h.filter(x=>x.s!=null).at(-1),h};
+}
+const pname=p=>esc(p.nick||'No name')+(names[p.uid]&&names[p.uid].name?` <span class="mut small">(${esc(names[p.uid].name)})</span>`:'');
+function adminDetail(p,s){
+  const c=p.cur,id=esc(p.id);
+  return `<div class="card" style="background:var(--bg)"><h3>${pname(p)} <span class="pill ${s.playing?'play':s.on?'on':''}">${s.playing?'playing':s.on?'online':'offline'}</span></h3>
+  ${scene(treeSVG(p,{fruits:fruitsOf(p),cur:!!c,click:true}))}
+  ${(()=>{const h=(Array.isArray(p.hist)?p.hist:[]).slice(-12)[appleSel];return appleSel!=null&&h?`<p class="note"><b>${esc(gname(h.g))}</b> · ${when(h.at)} · level ${h.l+1} · ${h.s==null?'not finished, the apple is bitten':`${dur(h.d)} · result ${h.s}%${h.ok?' · ripe apple':' · green apple'}`}</p>`:'<p class="small mut">Tap an apple to see which game it was, when, and with what result.</p>'})()}
+  <p>${c?(s.on?'Playing: ':'Started and not finished: ')+`«${esc(gname(c.g))}», level ${c.l+1} of 5, started: ${when(c.at)}`:'Not playing right now.'}</p>
+  <div class="tiles"><div class="tile"><b>${s.today}</b><span>today</span></div><div class="tile"><b>${s.week}</b><span>in 7 days</span></div><div class="tile"><b>${s.month}</b><span>in 30 days</span></div><div class="tile"><b>${+p.apples||0}</b><span>ripe apples</span></div><div class="tile"><b>${+p.days||0}</b><span>days with practice</span></div><div class="tile"><b>${Math.round((+p.sec||0)/60)} min</b><span>in exercises</span></div></div>
+  <p>Last result: ${s.last?`${s.last.s}% in «${esc(gname(s.last.g))}»`:'none yet'}. Last visit: ${when(p.seen)}.${p.hidden?' The tree is hidden from the shared garden.':''}</p>
+  <h3>Two weeks</h3>${calendar(p)}
+  <h3>By exercise</h3>${gameTable(p)}
+  <h3>Awards</h3>${awardsHTML(p)}
+  <h3>Latest sessions</h3>
+  ${s.h.length?`<div class="scroll"><table><thead><tr><th>When</th><th>Exercise</th><th>Level</th><th>Time</th><th>Result</th></tr></thead><tbody>${s.h.slice(-15).reverse().map(x=>`<tr><td>${when(x.at)}</td><td>${esc(gname(x.g))}</td><td>${x.l+1}</td><td>${x.d?dur(x.d):'—'}</td><td>${x.s==null?'not finished':x.s+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">No sessions yet.</p>'}
+  <h3>Encourage the participant</h3><p class="small mut">Your words will appear in their garden.</p>
+  <div class="chips">${CHEERS.map((t,i)=>`<button data-act="cheer" data-i="${i}">${t}</button>`).join('')}</div>
+  <div class="row"><label for="cheer" class="small mut" style="flex-basis:100%">Or in your own words</label><input type="text" id="cheer" maxlength="140" style="flex:1 1 220px"><button class="pri" data-act="cheersend" data-id="${id}">Send</button></div><p class="small mut" role="status">${esc(cheerMsg)}</p>
+  <div class="row">${confirmDel===p.id?`<span>Delete the tree and all results of this participant?</span><button class="danger" data-act="delyes" data-id="${id}">Yes, delete</button><button data-act="delno">Cancel</button>`:`<button class="danger" data-act="delask" data-id="${id}">Delete participant</button>`}</div></div>`;
+}
+function vAdmin(){
+  if(!isOwner&&sbOK)return `<section class="card"><h2>Roman’s panel</h2><p>Sign-in for the garden administrator.</p>
+    <div class="row"><label for="apass" class="small mut" style="flex-basis:100%">Administrator password</label><input type="password" id="apass" autocomplete="current-password" style="font:inherit;min-height:48px;padding:8px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)"><button class="pri" data-act="alogin">Sign in</button></div>
+    <p class="small mut" role="status">${esc(adminMsg)}</p></section>`;
+  if(!isOwner)return `<section class="card"><h2>Administrator panel</h2><p>This section is open only to the garden owner.</p></section>`;
+  const st=people.map(p=>[p,pstat(p)]);
+  const tiles=`<div class="tiles"><div class="tile"><b>${people.length}</b><span>participants</span></div><div class="tile"><b>${st.filter(x=>x[1].on).length}</b><span>online now</span></div><div class="tile"><b>${st.filter(x=>x[1].playing).length}</b><span>playing now</span></div><div class="tile"><b>${st.reduce((a,x)=>a+x[1].today,0)}</b><span>apples today</span></div></div>`;
+  const tabs=`<div class="chips">${[['live','Live garden'],['list','Participants'],['hist','Session history'],['max','Maximum statistics']].map(t=>`<button data-act="atab" data-t="${t[0]}" aria-pressed="${adminTab===t[0]}">${t[1]}</button>`).join('')}</div>`;
+  let body='';
+  if(!people.length)body=`<p class="mut">Nobody has planted a tree in «Account» mode yet. Participants will appear here right after planting.</p>`;
+  else if(adminTab==='live'){
+    body=`<div class="trees">${st.map(([p,s])=>`<button class="tcard${s.playing?' glow':''}" data-act="sel" data-id="${esc(p.id)}" aria-pressed="${sel===p.id}">${treeSVG(p,{cur:!!p.cur,fruits:fruitsOf(p)})}<b>${esc(p.nick||'No name')}</b><span class="pill ${s.playing?'play':s.on?'on':''}">${s.playing?'playing':s.on?'online':'offline'}</span></button>`).join('')}</div>`;
+    const f=st.find(x=>x[0].id===sel);
+    if(f){const [p,s]=f,c=p.cur;
+      body+=adminDetail(p,s)}
+  }else if(adminTab==='max'){body=vStats();
+  }else if(adminTab==='list'){
+    body=`<div class="scroll"><table><thead><tr><th>Participant</th><th>Status</th><th>Today</th><th>Week</th><th>Month</th><th>Apples</th><th>Last visit</th></tr></thead><tbody>${st.map(([p,s])=>`<tr><td>${pname(p)}</td><td>${s.playing?'playing: '+esc(gname(p.cur.g)):s.on?'online':'offline'}</td><td>${s.today}</td><td>${s.week}</td><td>${s.month}</td><td>${+p.apples||0}</td><td>${when(p.seen)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="row"><button data-act="csv">Copy the table as CSV</button><span id="copied" class="small mut" role="status"></span></div>`;
+  }else{
+    const all=st.flatMap(([p,s])=>s.h.map(x=>[p,x])).sort((a,b)=>b[1].at-a[1].at).slice(0,60);
+    body=all.length?`<div class="scroll"><table><thead><tr><th>When</th><th>Participant</th><th>Exercise</th><th>Level</th><th>Result</th></tr></thead><tbody>${all.map(([p,x])=>`<tr><td>${when(x.at)}</td><td>${esc(p.nick||'No name')}</td><td>${esc(gname(x.g))}</td><td>${x.l+1}</td><td>${x.s==null?'not finished':x.s+'%'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="mut">No sessions yet.</p>';
+  }
+  return `<section class="card"><div class="row between"><h2>Roman’s panel</h2>${sbOK?'<button data-act="alogout">Leave the panel</button>':''}</div><p class="mut">The data comes from the database and updates without reloading. Guests in «No saving» mode do not appear here.</p>${tiles}${tabs}${body}</section>`;
+}
+function vPrefs(){
+  const ui=getUI();
+  const m=(v,t,d,dis)=>`<label class="radio"><input type="radio" name="mode" id="m_${v}" value="${v}" data-in="mode" ${mode===v?'checked':''} ${dis?'disabled':''}><span><b>${t}</b><br><span class="small mut">${d}</span></span></label>`;
+  return `<section class="card"><h2>How to save your practice</h2><fieldset><legend class="small mut">Mode</legend>
+    ${m('account',sbOK?'In the shared garden':'Account',accountOK?(sbOK?'The name, the tree and the history are stored on the garden server. The garden administrator can see your practice. The tree is tied to this browser: on another device you need to plant a new one.':'The tree and the history are stored in the cloud and open on a phone and a computer. The garden owner can see your practice.'):'Not available: you need to sign in to Claude and get access to the page with permission to take part.',!accountOK)}
+    ${m('device','On this device','The data stays only in this browser and is not sent anywhere.')}
+    ${m('nosave','No saving','The results disappear when you close the page. You are not visible in the administrator panel.')}</fieldset></section>
+  <section class="card"><h2>My tree</h2>
+    <div class="row"><label for="nick2">Name</label><input type="text" id="nick2" maxlength="24" value="${esc(S.nick)}"><button data-act="rename">Save the name</button></div>
+    <div class="row"><label for="style">Kind of tree</label><select id="style" data-in="style">${STYLE_NAMES.map((n,i)=>`<option value="${i}" ${S.style===i?'selected':''}>${n}</option>`).join('')}</select></div>
+    <label class="radio"><input type="checkbox" id="hidden" data-in="hidden" ${S.hidden?'checked':''}><span><b>Hide the tree from the shared garden</b><br><span class="small mut">The tree stays in your garden and in the administrator panel.</span></span></label></section>
+  <section class="card"><h2>Comfort</h2>
+    <label class="radio"><input type="checkbox" id="big" data-in="big" ${ui.big?'checked':''}><span><b>Large text</b></span></label>
+    <label class="radio"><input type="checkbox" id="still" data-in="still" ${ui.still?'checked':''}><span><b>Turn off animation</b></span></label>
+    <label class="radio"><input type="checkbox" id="mute" data-in="mute" ${ui.mute?'checked':''}><span><b>Turn off sounds</b></span></label></section>
+  <section class="card"><h2>Deleting data</h2><p>This deletes the tree and the history of the name you are playing under now. Other names stay.</p>
+    <div class="row">${confirmDel==='me'?`<span>Delete everything with no way to bring it back?</span><button class="danger" data-act="wipeyes">Yes, delete</button><button data-act="delno">Cancel</button>`:`<button class="danger" data-act="wipeask">Delete my data</button>`}</div></section>`;
+}
+const ROUTES={garden:['My garden',vGarden],games:['Exercises',vGames],progress:['Progress',vProgress],common:['Shared garden',vCommon],admin:['Roman’s panel',vAdmin],prefs:['Settings',vPrefs]};
+function render(){
+  $('#nav').innerHTML=Object.entries(ROUTES).filter(([k])=>k!=='admin'||isOwner||sbOK).map(([k,v])=>`<a href="#${k}" ${route===k?'aria-current="page"':''}>${v[0]}</a>`).join('');
+  $('#main').innerHTML=route==='play'&&G?vPlay():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
+  if(route!=='garden')notice='';
+}
+function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
+window.addEventListener('hashchange',go);
+
+/* ---------- actions ---------- */
+function copy(text){const s=$('#copied');const p=navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(text):Promise.reject();
+  p.then(()=>{if(s)s.textContent='Copied'}).catch(()=>{if(s)s.textContent='The browser did not allow copying'})}
+const ACT={
+  big(){const ui=getUI();ui.big=!ui.big;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui);if(route==='prefs')render()},
+  plant(){const v=$('#nick').value.trim().slice(0,24);if(!v){$('#nick').focus();return}
+    if(mode==='nosave'){S.nick=v}else{if(Object.keys(ACC.profiles).length>=8)return;const k=newPid(),st=blank();st.nick=v;st.born=Date.now();ACC.profiles[k]=st;useProfile(k)}
+    adding=false;save();pres();sfx('ok');render()},
+  who(e){const k=e.dataset.p;if(!ACC.profiles[k]||k===ACC.active)return;useProfile(k);appleSel=null;bubble='';save();pres();render()},
+  addname(){adding=true;render();const i=$('#nick');if(i)i.focus()},
+  addcancel(){adding=false;render()},
+  trial(){G.trial=true;G.res=null;startGame()},
+  real(){G.trial=false;G.res=null;startGame()},
+  breath(){
+    abandon();route='breath';render();window.scrollTo(0,0);let left=60;clearInterval(breathT);
+    breathT=setInterval(()=>{left--;const t=$('#btxt'),l=$('#bleft');if(!t||route!=='breath'){clearInterval(breathT);return}
+      t.textContent=(60-left)%10<4?'Breathe in':'Breathe out';l.textContent='Time left: '+left+' s';
+      if(left<=0){clearInterval(breathT);bump('breath');save();t.textContent='Done';l.textContent='The minute is over. Thank you for taking care of yourself.'}},1000);
+  },
+  csvall(){copy(['Participant;Date;Exercise;Level;Seconds;Result;Status'].concat(people.flatMap(p=>(Array.isArray(p.hist)?p.hist:[]).map(h=>[String(p.nick||'').replace(/;/g,','),new Date(h.at).toISOString(),gname(h.g),h.l+1,h.d||0,h.s==null?'':h.s,h.s==null?'abandoned':h.ok?'ripe':'green'].join(';')))).join('\n'))},
+  rename(){const v=$('#nick2').value.trim().slice(0,24);if(!v)return;S.nick=v;save();render()},
+  open(e){openGame(e.dataset.g)},
+  lvl(e){G.lvl=+e.dataset.l;render()},
+  start(){G.trial=false;startGame()},
+  again(){G.res=null;startGame()},
+  nextlvl(){G.res=null;G.lvl=Math.min(4,G.lvl+1);startGame()},
+  explain(){const x=$('#expl');if(x)x.hidden=false},
+  quit(){abandon();go()},
+  home(){G=null;if(location.hash==='#garden'||location.hash==='')go();else location.hash='garden'},
+  apple(e){appleSel=+e.dataset.i;render()},
+  atab(e){adminTab=e.dataset.t;render()},
+  sel(e){sel=sel===e.dataset.id?null:e.dataset.id;confirmDel=null;cheerMsg='';appleSel=null;render()},
+  delask(e){confirmDel=e.dataset.id;render()},
+  delno(){confirmDel=null;render()},
+  async delyes(e){const [u,k]=e.dataset.id.split('~');confirmDel=null;sel=null;
+    if(sbOK){try{await arpc('ng_admin_delete',{p_id:e.dataset.id});await loadAdmin()}catch(x){}render();return}
+    try{const a=db.doc('activity/'+u),sn=await a.get(),x=sn.exists?clone(sn.data()):null;
+      if(x&&x.profiles&&k){delete x.profiles[k];if(Object.keys(x.profiles).length)await a.set(x);else await a.delete()}else await a.delete();
+      const t=db.doc('trees/'+u),ts=await t.get(),y=ts.exists?clone(ts.data()):null;
+      if(y&&y.list&&k){delete y.list[k];if(Object.keys(y.list).length)await t.set(y);else await t.delete()}else await t.delete();
+    }catch(x){}render()},
+  wipeask(){confirmDel='me';render()},
+  async wipeyes(){confirmDel=null;
+    if(sbOK&&mode==='account'&&ACC.active){try{await rpc('ng_delete',{p_key:KEY,p_pid:ACC.active})}catch(x){}}
+    if(mode==='nosave'){ACC={profiles:{g:blank()},active:'g'};S=ACC.profiles.g}
+    else{delete ACC.profiles[ACC.active];const ids=Object.keys(ACC.profiles);
+      if(ids.length){useProfile(ids[0]);await save()}
+      else{ACC.active='';S=blank();lastTree='';
+        if(mode==='account'){if(!sbOK){try{await db.doc('activity/'+uid).delete();await db.doc('trees/'+uid).delete()}catch(x){}}}else lsSet('ng_state',null)}}
+    pres();if(location.hash==='#garden')go();else location.hash='garden'},
+  wish(e){wordDraft=WISHES[+e.dataset.i];const w=$('#word');if(w){w.value=wordDraft;w.focus()}},
+  async wordsend(){const t=($('#word')?$('#word').value:wordDraft).trim().slice(0,140);if(!t){if($('#word'))$('#word').focus();return}
+    try{if(sbOK){await rpc('ng_word',{p_key:KEY,p_nick:S.nick,p_text:t});await loadCommon()}else await db.doc('words/'+uid).set({text:t,at:Date.now(),nick:S.nick});wordDraft='';wordMsg='The wish has been published.'}catch(x){wordMsg='Could not send the wish. Please try again a little later.'}
+    render()},
+  async worddel(e){try{if(sbOK){const w=words.find(x=>x.id===e.dataset.id);if(w&&w.mine)await rpc('ng_word_del',{p_key:KEY});else await arpc('ng_admin_word_del',{p_id:e.dataset.id});await loadCommon()}else await db.doc('words/'+e.dataset.id).delete();wordMsg=''}catch(x){wordMsg='Could not remove the wish.'}render()},
+  say(e){say(e.dataset.text,e)},
+  catf(e){catF=e.dataset.c;render()},
+  rustle(e){
+    const sc=e.closest('.scene'),still=document.documentElement.classList.contains('still');
+    e.classList.remove('shake');void e.getBoundingClientRect();e.classList.add('shake');setTimeout(()=>e.classList.remove('shake'),700);
+    if(sc&&!still)for(let i=0;i<7;i++){const l=document.createElement('i');l.className='fall';l.style.left=(30+rnd(40))+'%';l.style.setProperty('--dx',(rnd(120)-60)+'px');l.style.animationDelay=(i*90)+'ms';sc.appendChild(l);setTimeout(()=>l.remove(),3000)}
+  },
+  water(){
+    if(S.water===DAY())return;S.water=DAY();S.waters=(S.waters||0)+1;save();sfx('pop');
+    const sc=$('.scene'),still=document.documentElement.classList.contains('still');
+    if(sc&&!still)for(let i=0;i<16;i++){const d=document.createElement('i');d.className='drop';d.style.left=(22+rnd(56))+'%';d.style.animationDelay=(i*60)+'ms';sc.appendChild(d)}
+    bubble='The tree has had its water. Thank you for caring!'+(S.waters<=3?' A butterfly has come to the tree.':'');
+    setTimeout(()=>{if(route==='garden')render()},still?0:1500);
+  },
+  bird(){bubble=BIRD[rnd(BIRD.length)];sfx('tap');render()},
+  async thanks(){cheer=null;render();try{if(sbOK){cheerBy[ACC.active]=null;await rpc('ng_cheer_ack',{p_key:KEY,p_pid:ACC.active})}else await db.doc('cheers/'+uid).delete()}catch(x){}},
+  async alogin(){const i=$('#apass');adminPass=i?i.value:'';if(!adminPass)return;adminMsg='Checking the password…';render();
+    try{await loadAdmin();try{sessionStorage.setItem('ng_admin',adminPass)}catch(x){}adminMsg=''}catch(x){adminPass='';adminMsg=x&&x.code==='locked'?'Too many wrong attempts. Sign-in from this address is closed for 15 minutes.':x&&x.code==='forbidden'?'The password did not match.':'The database is unavailable right now. Please try later.'}
+    render()},
+  alogout(){adminPass='';isOwner=false;people=[];online=new Set();sel=null;try{sessionStorage.removeItem('ng_admin')}catch(x){}render()},
+  cheer(e){const i=$('#cheer');if(i){i.value=CHEERS[+e.dataset.i];i.focus()}},
+  async cheersend(e){const i=$('#cheer'),t=i?i.value.trim().slice(0,140):'';if(!t){if(i)i.focus();return}
+    try{if(sbOK)await arpc('ng_admin_cheer',{p_id:e.dataset.id,p_text:t});else{const [u,k]=e.dataset.id.split('~');await db.doc('cheers/'+u).set({text:t,at:Date.now(),pid:k||''})}cheerMsg='Sent. The participant will see your words in their garden.'}catch(x){cheerMsg='Could not send. Please try again.'}
+    render()},
+  copymine(){copy(JSON.stringify({nick:S.nick,apples:S.apples,flowers:S.flowers,days:S.days,history:S.hist.map(h=>({game:gname(h.g),level:h.l+1,date:new Date(h.at).toISOString(),seconds:h.d,score:h.s}))},null,1))},
+  csv(){copy(['Participant;Today;Week;Month;Apples;Last visit'].concat(people.map(p=>{const s=pstat(p);return[String(p.nick||'').replace(/;/g,','),s.today,s.week,s.month,+p.apples||0,p.seen?new Date(p.seen).toISOString():''].join(';')})).join('\n'))}
+};
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(t&&ACT[t.dataset.act])ACT[t.dataset.act](t)});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('g[data-act]')){e.preventDefault();ACT[e.target.dataset.act](e.target)}
+  if(e.key==='Enter'&&e.target.id==='nick')ACT.plant();if(e.key==='Enter'&&e.target.id==='apass')ACT.alogin()});
+document.addEventListener('input',e=>{if(e.target.dataset.in==='word'){wordDraft=e.target.value;return}
+  if(e.target.dataset.in==='search'){search=e.target.value;const pos=e.target.selectionStart;render();const q=$('#q');if(q){q.focus();q.setSelectionRange(pos,pos)}}});
+document.addEventListener('change',async e=>{const k=e.target.dataset.in;if(!k||k==='search'||k==='word')return;
+  if(k==='mode'){await setMode(e.target.value);render()}
+  if(k==='style'){S.style=+e.target.value;save()}
+  if(k==='hidden'){S.hidden=e.target.checked;save()}
+  if(k==='big'||k==='still'||k==='mute'){const ui=getUI();ui[k]=e.target.checked;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui)}
+});
+const h0=location.hash.slice(1);route=ROUTES[h0]?h0:'garden';render();
+init().catch(()=>{ready=true;render()});
+</script>
+</body>
+</html>
