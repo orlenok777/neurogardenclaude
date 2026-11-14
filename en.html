@@ -242,7 +242,8 @@ h3{margin-top:6px}
     </div>
   </header>
   <nav id="nav" aria-label="Sections"></nav>
-  <main id="main"><section class="card"><p>Opening the garden…</p></section></main>
+  <p class="small mut" role="status">Preview for review. The live site is unchanged.</p>
+<main id="main"><section class="card"><p>Opening the garden…</p></section></main>
   <footer>An initiative of Roman Levingard · Free, no subscription · Attention and memory practice. Not a diagnosis and not a treatment.</footer>
 </div>
 <script>
@@ -251,7 +252,8 @@ const LOC='en-GB', TTS_LANG='en', SPEECH='en-GB';
 /* ---------- optional own backend (Supabase) ----------
    Fill in both values to let anyone play under a name without sign-in.
    SB_KEY is the project's publishable (public) key. Used only outside Claude. See supabase.sql. */
-const SB_URL='https://yzfaysleelxddpbmowyd.supabase.co', SB_KEY='sb_publishable_l9nkMqtiYoi704wSm-wdRA_hNHLBDZj';
+// Draft preview: production connection is deliberately absent. Local tests inject loopback only.
+const SB_URL='', SB_KEY='';
 let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminMsg='', AU=null, AD={state:'out',google:null,assigned:null};
 async function rpc(fn,args,bearer){
   const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
@@ -461,7 +463,7 @@ function normalize(o){
   Object.keys(pr).filter(k=>/^[A-Za-z0-9_-]{1,40}$/.test(k)).slice(0,8).forEach(k=>{out.profiles[k]=cleanState(pr[k])});
   return out;
 }
-function useProfile(pid){ACC.active=pid;S=ACC.profiles[pid];housekeeping();if(sbOK){lsSet('ng_active',pid);const c=cheerBy[pid];cheer=c?Object.assign({pid},c):null}}
+function useProfile(pid){if(pid!==ACC.active){stopGardenVoice();social.ready=false;social.shared=false;trees=[]}ACC.active=pid;S=ACC.profiles[pid];housekeeping();if(sbOK){lsSet('ng_active',pid);const c=cheerBy[pid];cheer=c?Object.assign({pid},c):null}}
 function applyMeta(r,pid){
   if(!r)return;if(r.id)MY[pid]=r.id;
   const had=JSON.stringify(cheerBy[pid]||null),c=r.cheer||null,n=+r.online||0,ch=JSON.stringify(c)!==had||n!==hereN;
@@ -469,7 +471,21 @@ function applyMeta(r,pid){
   if(pid===ACC.active){cheer=c?Object.assign({pid},c):null;if(ch&&route==='garden'&&!adding)render()}
 }
 function heartbeat(){if(sbOK&&mode==='account'&&S.nick&&!document.hidden){const k=ACC.active;rpc('ng_ping',{p_key:KEY,p_pid:k}).then(r=>applyMeta(r,k)).catch(()=>{})}}
-async function loadCommon(){const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);trees=(Array.isArray(t)?t:[]).map(x=>cleanTree(x,x&&x.id,x&&x.id));words=(Array.isArray(w)?w:[]).filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id),text:x.text,nick:x.nick,at:num(x.at),mine:x.mine===true}))}
+let social={ready:false,shared:false,busy:false,error:''};
+async function loadCommon(){
+  if(!sbOK){social.ready=false;trees=[];words=[];return}
+  const pid=ACC.active;
+  try{
+    const status=await rpc('ng_garden_status',{p_key:KEY,p_pid:pid||''});
+    if(pid!==ACC.active)return;
+    if(!status||status.ok!==true)throw Error();
+    social.ready=true;social.shared=status.shared===true;
+    const [t,w]=await Promise.all([rpc('ng_public',{}),rpc('ng_words',{p_key:KEY})]);
+    if(pid!==ACC.active)return;
+    trees=(Array.isArray(t)?t:[]).map(x=>cleanTree(x,x&&x.id,x&&x.id));
+    words=(Array.isArray(w)?w:[]).filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id),text:x.text,nick:x.nick,at:num(x.at),mine:x.mine===true}));
+  }catch(e){if(pid===ACC.active){social.ready=false;social.shared=false;trees=[];words=[]}}
+}
 async function loadAdmin(){
   const rows=((await arpc('ng_owner_list')).rows||[]).filter(r=>r&&typeof r==='object');
   people=rows.map(r=>Object.assign(cleanState(r.state),{id:String(r.id),uid:String(r.dev),pid:String(r.pid),seen:num(r.seen),created:num(r.created)}));
@@ -523,11 +539,7 @@ async function save(){
     try{
       if(sbOK){await sbSave(ACC.active)}else{
       await db.doc('activity/'+uid).set(clone(ACC));
-      const list=treeDoc(),t=JSON.stringify(list);
-      if(t!==lastTree){
-        if(Object.keys(list).length)await db.doc('trees/'+uid).set({list});else await db.doc('trees/'+uid).delete();
-        lastTree=t;
-      }}
+      /* Legacy public-tree writes are disabled: only the explicit-consent Supabase path can share. */}
       if(unsaved){unsaved=false;if(notice===NOSAVE)notice='The connection is back, your result is saved.';if((route==='garden'&&!adding)||(route==='play'&&G&&!G.active&&G.res))render()}
     }catch(e){
       unsaved=true;
@@ -657,6 +669,42 @@ function say(text,btn){
   if(tts)tts.speak(text,{language:TTS_LANG,rate:.9}).then(reset,e=>{reset();if(e&&(e.code==='not_granted'||e.code==='unavailable')){ttsOff=true;$$('[data-act=say]').forEach(b=>b.remove())}});
   else try{const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH;u.rate=.9;u.onend=u.onerror=reset;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){reset()}
 }
+
+/* Browser-only, optional encouragement. No microphone, recording or external voice API. */
+const SOCIAL_WORDS='Welcome to the garden. You can practise at your own pace. May today bring a pleasant small step.';
+let socialUtterance=null,socialVoiceError=false;
+function gardenVoice(){
+  if(!window.speechSynthesis||typeof speechSynthesis.getVoices!=='function'||typeof SpeechSynthesisUtterance==='undefined')return null;
+  return speechSynthesis.getVoices().find(v=>v.localService===true&&String(v.lang).toLowerCase().split('-')[0]===SPEECH.toLowerCase().split('-')[0])||null;
+}
+function stopGardenVoice(){
+  const active=socialUtterance;socialUtterance=null;
+  if(active)try{speechSynthesis.cancel()}catch(e){}
+  syncGardenVoice();
+}
+function syncGardenVoice(){
+  const play=$('[data-act=gardensay]'),stop=$('[data-act=gardenstop]'),status=$('#garden-voice-status');
+  if(play)play.disabled=!!socialUtterance||getUI().voiceOff||!gardenVoice();
+  if(stop)stop.disabled=!socialUtterance;
+  if(status)status.textContent=socialVoiceError?'Could not play the voice. You can read the encouragement.':!gardenVoice()?'No local voice for this language is available on this device. You can read the encouragement.':'Voice availability depends on your device. Sound starts only when you press the button.';
+}
+function speakGarden(){
+  stopGardenVoice();const voice=gardenVoice();if(getUI().voiceOff||!voice)return;
+  if(speaking)say('');
+  socialVoiceError=false;
+  const u=new SpeechSynthesisUtterance(SOCIAL_WORDS);socialUtterance=u;u.voice=voice;u.lang=SPEECH;u.rate=.9;
+  u.onend=()=>{if(socialUtterance===u){socialUtterance=null;syncGardenVoice()}};
+  u.onerror=()=>{if(socialUtterance===u){socialUtterance=null;socialVoiceError=true;syncGardenVoice()}};
+  try{speechSynthesis.speak(u)}catch(e){socialUtterance=null;socialVoiceError=true}
+  syncGardenVoice();
+}
+function gardenVoiceCard(){
+  return `<section class="card"><h2>A little encouragement</h2><p id="garden-encouragement">${SOCIAL_WORDS}</p>
+    <div class="row"><button data-act="gardensay" ${socialUtterance||getUI().voiceOff||!gardenVoice()?'disabled':''}>Listen to encouragement</button><button data-act="gardenstop" ${socialUtterance?'':'disabled'}>Stop voice</button></div>
+    <label class="radio"><input type="checkbox" data-in="voiceOff" ${getUI().voiceOff?'checked':''}><span>Turn off spoken encouragement</span></label>
+    <p class="small mut" id="garden-voice-status" role="status">${socialVoiceError?'Could not play the voice. You can read the encouragement.':!gardenVoice()?'No local voice for this language is available on this device. You can read the encouragement.':'Voice availability depends on your device. Sound starts only when you press the button.'}</p></section>`;
+}
+if(window.speechSynthesis&&speechSynthesis.addEventListener)speechSynthesis.addEventListener('voiceschanged',()=>{if(route==='common')syncGardenVoice()});
 
 /* ---------- games ---------- */
 const GAMES={};
@@ -1369,18 +1417,21 @@ function vProgress(){
    <div class="row"><button data-act="copymine">Copy my results</button><span id="copied" class="small mut" role="status"></span></div></section>`;
 }
 function vCommon(){
-  if(!db&&!sbOK)return `<section class="card"><h2>Shared garden</h2><p>The shared garden is visible to participants who signed in to Claude and opened this page by invitation.</p></section>`;
+  if(!sbOK||!social.ready)return `<section class="card"><h2>Shared garden</h2><p>The shared garden is not available yet. Your tree will not be published without a separate choice.</p></section>${gardenVoiceCard()}`;
   const q=search.trim().toLowerCase(),list=trees.filter(t=>!q||String(t.nick||'').toLowerCase().includes(q));
   const total=trees.reduce((a,t)=>a+(+t.apples||0),0);
   const mk=monKey(),harv=trees.reduce((a,t)=>a+(t.monKey===mk?(+t.mon||0):0),0),goal=[50,100,250,500,1000,2500,5000,10000].find(g=>g>harv)||harv;
   const ws=[...words].filter(w=>typeof w.text==='string'&&w.text.trim()).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,30);
   const canWrite=mode==='account'&&S.nick;
-  return `<section class="card"><h2>Shared garden</h2><p>Trees: ${trees.length}. Apples grown in total: ${total}.${hereN>1?` In the garden now: ${hereN} people`:''}</p>
+  return `<section class="card"><h2>Shared garden</h2><p>Only trees whose gardeners chose to share them appear here.</p>
+   <p>Your chosen name, tree appearance and harvest are shared. Session history and private statistics stay private.</p>
+   ${mode==='account'&&S.nick?`<p>Name to share: <b>${esc(S.nick)}</b></p><p role="status">${social.shared?'You chose to share your tree. The hide-tree setting still applies.':'You are not sharing your tree.'}</p><button data-act="gardenshare" ${social.busy?'disabled':''}>${social.shared?'Remove my tree from the shared garden':'Share my tree in the shared garden'}</button>`:'<p>To share a tree, first plant it with server saving enabled.</p>'}
+   <p role="status">${esc(social.error)}</p><p>Trees: ${trees.length}. Apples grown in total: ${total}.${hereN>1?` In the garden now: ${hereN} people`:''}</p>
    <div><p class="small mut">Harvest of the month: ${harv} of ${goal} apples. Everyone grows it together.</p><div class="bar"><i style="width:${Math.min(100,harv/goal*100).toFixed(0)}%"></i></div></div>
    <div class="row"><label for="q" class="small mut">Find a tree by name</label><input type="text" id="q" value="${esc(search)}" data-in="search"></div>
-   ${list.length?`<div class="trees">${list.slice(0,cLim).map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'No name')}</b><span class="small mut">${+t.apples||0} apples${t.id===myTreeId()?' · this is you':''}</span></div>`).join('')}</div>${list.length>cLim?`<p class="small mut">Trees shown: ${cLim} of ${list.length}</p><div class="row"><button data-act="cmore">Show more trees</button></div>`:''}`:`<p class="mut">${trees.length?'There is no such tree.':'There are no trees in the shared garden yet. The first one will appear after the first planting.'}</p>`}
+   ${list.length?`<div class="trees">${list.slice(0,cLim).map(t=>`<div class="tcard">${treeSVG(t)}<b>${esc(t.nick||'No name')}</b><span class="small mut">${+t.apples||0} apples${t.id===myTreeId()?' · this is you':''}</span></div>`).join('')}</div>${list.length>cLim?`<p class="small mut">Trees shown: ${cLim} of ${list.length}</p><div class="row"><button data-act="cmore">Show more trees</button></div>`:''}`:`<p class="mut">${trees.length?'There is no such tree.':'No trees have been shared yet. You can keep your own tree private.'}</p>`}
    <p class="small mut">Only the tree name, apples and flowers are visible here. Games, results and practice times are not shown to other participants.</p></section>
-  <section class="card"><h2>Kind words</h2><p class="mut">Leave a wish for the other gardeners. Everyone has one wish and can change it.</p>
+  ${gardenVoiceCard()}<section class="card"><h2>Kind words</h2><p class="small mut">Wishes are published separately when you press Send. Hiding your tree does not remove a wish you already sent.</p><p class="mut">Leave a wish for the other gardeners. Everyone has one wish and can change it.</p>
    ${ws.length?`<div class="list">${ws.map(w=>`<div class="word"><p>${esc(w.text.slice(0,140))}<br><span class="small mut">${esc(typeof w.nick==='string'&&w.nick?w.nick.slice(0,24):'A garden participant')}${isMine(w)?' · this is you':''}</span></p>${isMine(w)||isOwner?`<button data-act="worddel" data-id="${esc(w.id)}">Remove</button>`:''}</div>`).join('')}</div>`:'<p class="mut">Nobody has written anything yet. Your wish can be the first.</p>'}
    ${canWrite?`<div class="chips">${WISHES.map((w,i)=>`<button data-act="wish" data-i="${i}">${w}</button>`).join('')}</div>
    <div class="row"><label for="word" class="small mut" style="flex-basis:100%">Or write in your own words</label><input type="text" id="word" maxlength="140" data-in="word" value="${esc(wordDraft)}"><button class="pri" data-act="wordsend">Leave a wish</button></div><p id="wordmsg" class="small mut" role="status">${esc(wordMsg)}</p>`:'<p class="small mut">Wishes can be written by participants in «Account» mode who have planted a tree.</p>'}</section>`;
@@ -1486,18 +1537,31 @@ function render(){
   $('#main').innerHTML=route==='play'&&G?vPlay():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
   if(route!=='garden'&&route!=='play')notice='';   /* a save that failed on the result screen must still be reported */
 }
-function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
+function go(){stopGardenVoice();wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
 window.addEventListener('hashchange',go);
 
 /* ---------- actions ---------- */
 function copy(text){const s=$('#copied');const p=navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(text):Promise.reject();
   p.then(()=>{if(s)s.textContent='Copied'}).catch(()=>{if(s)s.textContent='The browser did not allow copying'})}
 const ACT={
+  gardensay(){speakGarden()},
+  gardenstop(){stopGardenVoice()},
+  async gardenshare(){
+    if(!social.ready||social.busy||mode!=='account'||!S.nick)return;
+    const pid=ACC.active,shared=!social.shared;social.busy=true;social.error='';render();
+    try{
+      await save();
+      const r=await rpc('ng_garden_share',{p_key:KEY,p_pid:pid,p_shared:shared});
+      if(!r||r.ok!==true)throw Error();
+      if(pid===ACC.active){social.shared=r.shared===true;await loadCommon()}
+    }catch(e){social.error='Could not change sharing. Check your connection and try again.'}
+    finally{social.busy=false;if(route==='common')render()}
+  },
   big(){const ui=getUI();ui.big=!ui.big;lsSet('ng_ui',JSON.stringify(ui));applyUI(ui);if(route==='prefs')render()},
   plant(){const v=$('#nick').value.trim().slice(0,24);if(!v){$('#nick').focus();return}
     if(mode==='nosave'){S.nick=v}else{if(Object.keys(ACC.profiles).length>=8)return;const k=newPid(),st=blank();st.nick=v;st.born=Date.now();ACC.profiles[k]=st;useProfile(k)}
     adding=false;save();pres();sfx('ok');render()},
-  who(e){const k=e.dataset.p;if(!ACC.profiles[k]||k===ACC.active)return;useProfile(k);appleSel=null;bubble='';save();pres();render()},
+  who(e){const k=e.dataset.p;if(!ACC.profiles[k]||k===ACC.active)return;useProfile(k);appleSel=null;bubble='';save();pres();render();sbRoute()},
   addname(){adding=true;render();const i=$('#nick');if(i)i.focus()},
   addcancel(){adding=false;render()},
   trial(){G.trial=true;G.res=null;startGame()},
@@ -1580,6 +1644,7 @@ document.addEventListener('input',e=>{if(e.target.dataset.in==='word'){wordDraft
   if(e.target.dataset.in==='aq'){aq=e.target.value;aLim=60;const pos=e.target.selectionStart;render();const q=$('#aq');if(q){q.focus();q.setSelectionRange(pos,pos)}return}
   if(e.target.dataset.in==='search'){search=e.target.value;cLim=60;const pos=e.target.selectionStart;render();const q=$('#q');if(q){q.focus();q.setSelectionRange(pos,pos)}}});
 document.addEventListener('change',async e=>{const k=e.target.dataset.in;if(!k||k==='search'||k==='word'||k==='aq')return;
+  if(k==='voiceOff'){const ui=getUI();ui.voiceOff=e.target.checked;lsSet('ng_ui',JSON.stringify(ui));stopGardenVoice();render();return}
   if(k==='mode'){await setMode(e.target.value);render()}
   if(k==='style'){S.style=+e.target.value;save()}
   if(k==='hidden'){S.hidden=e.target.checked;save()}

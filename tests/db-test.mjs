@@ -23,6 +23,7 @@ const schema2 = fs.readFileSync(sqlPath, 'utf8');
 const schema3 = fs.readFileSync(path.join(dir, 'supabase-auth.sql'), 'utf8');
 const ownerSql = fs.readFileSync(path.join(dir, 'supabase-owner.sql'), 'utf8');
 const schema4 = fs.readFileSync(path.join(dir, 'supabase-v4.sql'), 'utf8');
+const socialSchema=fs.readFileSync(path.join(dir,'supabase-social.sql'),'utf8');
 const ZERO = '00000000-0000-0000-0000-000000000000';
 
 const db = new PGlite({ extensions: { pgcrypto } });
@@ -307,6 +308,31 @@ if (selftest) {
   ok('schema 4: all 27 functions pin an empty search_path', sp4.rows.length === 27 && sp4.rows.every(r => (r.proconfig || []).some(c => c === 'search_path=""' || c === 'search_path=')), String(sp4.rows.length));
   const rls4 = await db.query(`select relname, relrowsecurity from pg_class where relnamespace='public'::regnamespace and relname like 'ng_%' and relkind='r'`);
   ok('RLS enabled on all seven tables', rls4.rows.length === 7 && rls4.rows.every(r => r.relrowsecurity));
+  // Social sharing is separate from gameplay state, including all legacy rows.
+  const beforeSocial=JSON.stringify((await db.query('select id,state from public.ng_players order by id')).rows);
+  await db.exec(socialSchema);await db.exec(socialSchema);
+  ok('social migration does not rewrite player state',beforeSocial===JSON.stringify((await db.query('select id,state from public.ng_players order by id')).rows));
+  ok('all legacy trees are private until explicit consent',(await rpc('ng_public')).length===0);
+  const ka='social-a'.repeat(8),kb='social-b'.repeat(8);
+  const sa=await rpc('ng_save',{p_key:ka,p_pid:'social',p_state:st({nick:'Social A',hidden:false,shared:true}),p_rev:null});
+  await rpc('ng_save',{p_key:kb,p_pid:'social',p_state:st({nick:'Social B',hidden:false}),p_rev:null});
+  ok('new tree and invented state consent stay private',(await rpc('ng_public')).length===0);
+  ok('different key cannot consent for a different pid',(await rpc('ng_garden_share',{p_key:kb,p_pid:'missing',p_shared:true})).error==='not_found');
+  await rpc('ng_garden_share',{p_key:ka,p_pid:'social',p_shared:true});
+  const published=await rpc('ng_public');
+  ok('only the consenting tree appears',published.length===1&&published[0].nick==='Social A');
+  ok('public payload is an exact whitelist',Object.keys(published[0]).sort().join(',')===['id','nick','style','apples','flowers','waters','mon','monKey'].sort().join(','));
+  ok('consent belongs to the key and profile',(await rpc('ng_garden_status',{p_key:kb,p_pid:'social'})).shared===false);
+  await db.exec(socialSchema);
+  ok('reapplying migration preserves explicit consent',(await rpc('ng_garden_status',{p_key:ka,p_pid:'social'})).shared===true);
+  await rpc('ng_save',{p_key:ka,p_pid:'social',p_state:st({nick:'Social A',hidden:true}),p_rev:sa.rev});
+  ok('existing hide setting still overrides sharing',(await rpc('ng_public')).length===0);
+  await rpc('ng_garden_share',{p_key:ka,p_pid:'social',p_shared:false});
+  await rpc('ng_save',{p_key:ka,p_pid:'social',p_state:st({nick:'Social A',hidden:false,shared:true}),p_rev:(await rpc('ng_load',{p_key:ka}))[0].rev});
+  ok('withdrawal survives stale or forged ordinary save',(await rpc('ng_public')).length===0);
+  await denied('consent table not readable as anon',()=>as('anon',null,'select * from public.ng_garden_consent'));
+  await denied('consent table not writable as authenticated',()=>as('authenticated',{sub:ZERO},'insert into public.ng_garden_consent(player_id,shared) values ($1,true)',[sa.id]));
+  ok('consent table RLS enabled',(await db.query("select relrowsecurity from pg_class where oid='public.ng_garden_consent'::regclass")).rows[0].relrowsecurity);
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }
@@ -316,6 +342,7 @@ await db.exec(schema3);
 await db.exec(schema3);
 console.log('schema 3 ok (applied twice)');
 if (process.env.NG_SCHEMA !== '3') { await db.exec(schema4); await db.exec(schema4); console.log('schema 4 ok (applied twice)'); }
+if(process.env.NG_SOCIAL!=='0'){await db.exec(socialSchema);await db.exec(socialSchema);console.log('explicit social consent ready')}
 const sessions = new Map(), refreshes = new Map(), codes = new Map();
 let nextGoogle = null, googleOn = true;
 const tok = () => crypto.randomBytes(24).toString('hex');
@@ -374,4 +401,4 @@ http.createServer(async (req, res) => {
     const msg = String(e.message || e);
     send(/does not exist/.test(msg) ? 404 : /permission denied/.test(msg) ? 403 : 400, { message: msg });
   }
-}).listen(port, () => console.log('listening', port));
+}).listen(port, '127.0.0.1', () => console.log('listening', port));

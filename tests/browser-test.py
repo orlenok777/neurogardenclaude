@@ -8,7 +8,7 @@ The script copies the three built pages to a temp folder with the database addre
 serves them from one origin (like GitHub Pages), starts tests/db-test.mjs as the database and drives Chromium.
 Only synthetic names are used.
 """
-import asyncio, json, os, pathlib, re, shutil, subprocess, sys, tempfile, time, urllib.error, urllib.request
+import asyncio, json, os, pathlib, re, shutil, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 from playwright.async_api import async_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -49,6 +49,10 @@ def status(fn, token=None):
 
 
 def stand():
+    for port in (DB_PORT, WEB_PORT):
+        with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            probe.bind(('127.0.0.1',port))  # fail closed if another service owns a test port
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='ng-site-'))
     for f in ('index.html', 'he.html', 'en.html'):
         s = (ROOT / f).read_text(encoding='utf-8')
@@ -60,6 +64,7 @@ def stand():
     web = subprocess.Popen([sys.executable, '-m', 'http.server', str(WEB_PORT), '--bind', '127.0.0.1'], cwd=tmp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(60):
         try:
+            if db.poll() is not None or web.poll() is not None: raise RuntimeError('local test process exited')
             rpc('ng_public', {}); urllib.request.urlopen(SITE); return tmp, db, web
         except Exception:
             time.sleep(0.5)
@@ -115,7 +120,9 @@ async def main():
             b = await p.chromium.launch(); errs = []
 
             async def ctx():
-                return await b.new_context(viewport={'width': 390, 'height': 844})
+                c=await b.new_context(viewport={'width': 390, 'height': 844}, service_workers='block')
+                await c.route('**/*', lambda r: r.continue_() if r.request.url.startswith((SITE, f'http://127.0.0.1:{DB_PORT}/')) else r.abort())
+                return c
 
             async def page(c, f=''):
                 pg = await c.new_page(); pg.on('pageerror', lambda e: errs.append(str(e)))
@@ -378,6 +385,7 @@ async def main():
                 await reload(l1)
                 ok('12 after a reload the player still has exactly the earned apples', await l1.evaluate("S.apples") == real and await l1.evaluate(FIN) == 1)
                 rpc('ng_save', {'p_key': 'f' * 40, 'p_pid': 'p1', 'p_state': {'nick': 'QA-Fake', 'apples': 999999, 'hist': []}, 'p_rev': None})
+                rpc('ng_garden_share', {'p_key':'f'*40,'p_pid':'p1','p_shared':True})
                 await pn.evaluate("location.hash='common'"); await pn.wait_for_timeout(900)
                 ok('12 a tree created with a made-up harvest shows zero apples in the shared garden', await pn.evaluate("(trees.find(t=>t.nick==='QA-Fake')||{}).apples") == 0)
                 await pn.evaluate("location.hash='admin'"); await pn.wait_for_timeout(900)
@@ -392,6 +400,7 @@ async def main():
             # many participants: the panel and the shared garden draw in portions
             for i in range(130):
                 rpc('ng_save', {'p_key': f'{i:040d}', 'p_pid': 'p1', 'p_state': {'nick': f'QA-Bulk{i:03d}', 'apples': 0, 'hist': []}, 'p_rev': None})
+                rpc('ng_garden_share', {'p_key':f'{i:040d}','p_pid':'p1','p_shared':True})
             await pn.click('[data-act=atab][data-t=live]'); await pn.evaluate(REF)
             n0 = await pn.evaluate("document.querySelectorAll('.trees .tcard').length"); await pn.click('[data-act=amore]'); await pn.wait_for_timeout(200)
             ok('12 panel draws 60 trees at a time and "show more" adds the next 60', n0 == 60 and await pn.evaluate("document.querySelectorAll('.trees .tcard').length") == 120 and await pn.evaluate("people.length") > 130)
@@ -437,4 +446,5 @@ async def main():
     sys.exit(1 if F else 0)
 
 
-asyncio.run(main())
+if __name__=='__main__':
+    asyncio.run(main())
