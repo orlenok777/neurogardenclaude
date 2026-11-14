@@ -35,6 +35,7 @@ async def main():
                 pg=await c.new_page();pg.on('pageerror',lambda e:errors.append(str(e)))
                 await pg.goto(stand.SITE+file);await pg.wait_for_selector('#nick');return pg
             a=await page(await context());await stand.plant(a,'Тест: Яблоня')
+            ok('language links stay inside the isolated preview',await a.locator('.langs a').evaluate_all('(links)=>links.every(a=>new URL(a.href).origin===location.origin)'))
             await a.locator('a[href="#common"]').click()
             if os.environ.get('NG_SOCIAL')=='0':
                 await a.wait_for_function("document.querySelector('#main').innerText.includes('пока недоступен')")

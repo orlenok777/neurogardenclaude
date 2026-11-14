@@ -16,7 +16,6 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'i18n'))
 from extract import FRAG
 
-SITE = 'https://orlenok777.github.io/neurogardenclaude/'
 TZ = ZoneInfo('Asia/Jerusalem')
 MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 LANGS = {
@@ -36,7 +35,7 @@ def top_block(lang, cur, prev):
         d = datetime.fromisoformat(r['at']).astimezone(TZ)
         return f'<time datetime="{d.isoformat()}">{L["when"](d)}</time>'
     links = ''.join(
-        f'<a href="{SITE}{"" if k == "ru" else v["file"]}" lang="{k}"{" aria-current=\"page\"" if k == lang else ""}>{v["name"]}</a>'
+        f'<a href="{v["file"]}" lang="{k}"{" aria-current=\"page\"" if k == lang else ""}>{v["name"]}</a>'
         for k, v in LANGS.items())
     return ('<!--NGTOP--><div class="top" id="vers">'
             f'<p><b id="ver">{L["ver"]} {cur["version"]}</b> · {L["upd"]} {stamp(cur)} <span class="mut">({L["tz"]})</span></p>'
