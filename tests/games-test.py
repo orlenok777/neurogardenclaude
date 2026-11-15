@@ -1,4 +1,4 @@
-"""Game checks: the catalogue of 26 exercises, their generators, exact play and random play on a phone-size screen.
+"""Game checks: the catalogue of 27 exercises, their generators, exact play and random play on a phone-size screen.
 
     pip install playwright && playwright install chromium
     python3 tests/games-test.py            full run (about ten minutes)
@@ -8,9 +8,9 @@ Runs on local copies of the three built pages with the database address removed 
 so nothing leaves this machine. Timers are sped up eight times; the game code itself is not changed.
 
 What is checked
-- catalogue: 26 exercises in 4 groups, each with a name, instructions, a "trains" line and five levels that differ;
+- catalogue: 27 exercises in 4 groups, each with a name, instructions, a "trains" line and five levels that differ;
 - generators: number series, water puzzle (solvable, shortest path is really the shortest), mini sudoku (valid, one solution);
-- exact play (the test knows the right answers): seven exercises give 100% and a ripe apple, wrong answers lower the result
+- exact play (the test knows the right answers): eight exercises give 100% and a ripe apple, wrong answers lower the result
   and a result below 60% gives no ripe apple;
 - random play: every exercise on every level runs to the end from taps alone, the result is 0..100, a ripe apple is
   counted only for 60% and more, a trial round and merely opening an exercise write nothing, leaving gives a bitten apple;
@@ -113,6 +113,17 @@ window.T = {
   fits(a, i, v) { const r = i >> 2, c = i & 3; for (let j = 0; j < 16; j++) if (a[j] === v && j !== i && ((j >> 2) === r || (j & 3) === c || ((j >> 3) === (r >> 1) && ((j & 3) >> 1) === (c >> 1)))) return false; return true },
   count(a) { const i = a.indexOf(0); if (i < 0) return 1; let n = 0; for (let v = 1; v <= 4; v++) if (T.fits(a, i, v)) { a[i] = v; n += T.count(a); a[i] = 0 } return n },
   solve(a) { a = [...a]; const go = () => { const i = a.indexOf(0); if (i < 0) return true; for (let v = 1; v <= 4; v++) if (T.fits(a, i, v)) { a[i] = v; if (go()) return true; a[i] = 0 } return false }; go(); return a },
+  async dual(lvl, wrong = '') {
+    T.begin('dual', lvl); let places = 0, leaves = 0;
+    for (let r = 0; r < 6; r++) {
+      const dp = await T.until(() => T.all('.dp[data-i]')[0]);
+      const fruit = +T.all('.dc')[0].dataset.f, bug = +dp.dataset.i; leaves = T.all('.dp').length - 1;
+      const bs = await T.until(() => T.all('.opts button[data-f]').length === 2 && T.all('.opts button[data-f]'));
+      bs.find(b => (+b.dataset.f === fruit) === (wrong !== 'fruit')).click();
+      const qs = await T.until(() => T.all('.dq').length && T.all('.dq')); places = qs.length;
+      qs.find(q => (+q.dataset.i === bug) === (wrong !== 'place')).click();
+      if (r < 5) await T.until(() => !T.all('.dq').length) }
+    return Object.assign(await T.result(), { places, leaves }) },
   async equation(lvl, right = true) {
     T.begin('equation', lvl);
     const val = (t, x) => { const [l, r] = t.replace('?', x).replace(/×/g, '*').replace(/:/g, '/').replace(/−/g, '-').split('='); return Math.abs(Function('return ' + l)() - Function('return ' + r)()) < 1e-9 };
@@ -153,10 +164,10 @@ async def main():
             cat = json.loads(await pg.evaluate("""JSON.stringify(Object.values(GAMES).map(g=>{const src=g.run.toString();
               const arrs=[...src.matchAll(/(\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\])\\[(?:c\\.lvl|l)\\]/g)].map(m=>{try{return Function('return '+m[1])()}catch(e){return null}}).filter(Boolean);
               return{id:g.id,name:g.name,cat:g.cat,how:g.how,desc:g.desc,trains:TRAINS[g.id]||'',lvl:/c\\.lvl/.test(src),arrs:arrs.map(a=>[a.length,JSON.stringify(a[0])!==JSON.stringify(a[a.length-1])])}}))"""))
-            ok('catalogue: 26 exercises', len(cat) == 26, len(cat))
+            ok('catalogue: 27 exercises', len(cat) == 27, len(cat))
             ok('catalogue: four groups, none empty', collections.Counter(g['cat'] for g in cat).keys() == {'mem', 'att', 'log', 'spa'}, collections.Counter(g['cat'] for g in cat))
             ok('catalogue: every exercise has a name, a description, instructions and a "trains" line', all(len(g['name']) > 2 and len(g['desc']) > 10 and len(g['how']) > 20 and len(g['trains']) > 3 for g in cat), [g['id'] for g in cat if not g['trains']])
-            ok('catalogue: names are unique and every exercise is on the exercises page', len({g['name'] for g in cat}) == 26 and sorted(await pg.evaluate('ORDER')) == sorted(g['id'] for g in cat))
+            ok('catalogue: names are unique and every exercise is on the exercises page', len({g['name'] for g in cat}) == 27 and sorted(await pg.evaluate('ORDER')) == sorted(g['id'] for g in cat))
             ok('levels: every exercise reads the chosen level', all(g['lvl'] for g in cat), [g['id'] for g in cat if not g['lvl']])
             ok('levels: every per-level table has five entries and level 1 differs from level 5', all(n == 5 and diff for g in cat for n, diff in g['arrs']), [(g['id'], g['arrs']) for g in cat if any(n != 5 or not d for n, d in g['arrs'])])
             # ---- generators ----
@@ -203,6 +214,11 @@ async def main():
             ok('find the number: every example has exactly one right option; right answers give 100% on all five levels', all(x['score'] == 100 and x['ok'] for x in r), r)
             a0 = await apples(); r = await run('T.equation(3,false)')
             ok('find the number: wrong answers give 0% and no ripe apple', r['score'] == 0 and r['err'] == 5 and await apples() == a0, r)
+            r = [await run(f'T.dual({l})') for l in range(5)]
+            ok('double decision: naming the fruit and the place of the beetle gives 100% on all five levels', all(x['score'] == 100 and x['ok'] and x['err'] == 0 for x in r), r)
+            ok('double decision: higher levels show the picture for a shorter time and offer more places', [x['places'] for x in r] == [4, 6, 8, 8, 8] and [x['leaves'] for x in r] == [0, 0, 0, 2, 4], r)
+            a0 = await apples(); r = await run('T.dual(1,"fruit")'); r2 = await run('T.dual(1,"place")')
+            ok('double decision: a wrong fruit or a wrong place alone makes the round count as an error, no ripe apple', r['score'] == 0 and r['err'] == 6 and r2['score'] == 0 and r2['err'] == 6 and await apples() == a0, [r, r2])
             st = json.loads(await pg.evaluate("JSON.stringify({a:S.apples,ripe:S.hist.filter(h=>h.ok).length,fin:S.hist.filter(h=>h.s!=null).length,all:S.hist.length,lv:S.lv})"))
             ok('history: every finished round is recorded once, ripe apples equal rounds with 60% and more', st['a'] == st['ripe'] and st['fin'] == st['all'], st)
             ok('progress: the highest level passed is remembered', st['lv'].get('schulte') == 4 and st['lv'].get('water') == 4, st['lv'])
@@ -255,7 +271,7 @@ async def main():
             for f, lang, levels in plan:
                 n, bad = await monkey(f, lang, levels)
                 lv = ', '.join(str(l + 1) for l in levels)
-                ok(f'{lang}: {n} rounds (26 exercises, levels {lv}) run to the end from taps alone', not bad['unfinished'], bad['unfinished'])
+                ok(f'{lang}: {n} rounds (27 exercises, levels {lv}) run to the end from taps alone', not bad['unfinished'], bad['unfinished'])
                 ok(f'{lang}: every result is 0..100 with a whole error count', not bad['score'], bad['score'][:3])
                 ok(f'{lang}: a ripe apple is counted for 60% and more, and only then', not bad['apple'], bad['apple'][:3])
                 ok(f'{lang}: nothing sticks out of a 360 px screen, also with large text', not bad['overflow'], bad['overflow'][:5])

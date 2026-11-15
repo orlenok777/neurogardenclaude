@@ -40,6 +40,12 @@ html.hc :focus-visible{outline:4px solid var(--ink);outline-offset:2px}
 .hmini{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .hmini .hface{width:60px;height:60px}
 .hmini #hcap{flex:1 1 160px}
+.dual{position:relative;width:min(100%,320px);aspect-ratio:1;margin:0 auto;background:#17211b;border-radius:16px;direction:ltr}
+.dual .dc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:3rem;line-height:1;color:#f2f6f2}
+.dual .dp,.dual .dq{position:absolute;transform:translate(-50%,-50%)}
+.dual .dp{font-size:2rem;line-height:1}
+.dual .dq{width:52px;height:52px;min-height:0;padding:0;border-radius:50%;font-size:1.3rem;line-height:1}
+.sbar{display:flex;flex-direction:column;gap:6px}
 *{box-sizing:border-box}
 html{font-size:19px}
 html.big{font-size:23px}
@@ -243,7 +249,7 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
-<!--NGTOP--><div class="top" id="vers"><p><b id="ver">גרסה 3.6</b> · עודכנה <time datetime="2026-11-15T08:34:47+02:00">15.11.2026 בשעה 08:34</time> <span class="mut">(שעון ישראל)</span></p><p class="mut" id="prev">הגרסה הקודמת: 3.5 · <time datetime="2026-11-13T14:39:29+02:00">13.11.2026 בשעה 14:39</time></p><p class="langs"><a href="index.html" lang="ru">Русский</a><a href="he.html" lang="he" aria-current="page">עברית</a><a href="en.html" lang="en">English</a></p></div><!--/NGTOP-->
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">גרסה 3.7</b> · עודכנה <time datetime="2026-11-15T09:43:40+02:00">15.11.2026 בשעה 09:43</time> <span class="mut">(שעון ישראל)</span></p><p class="mut" id="prev">הגרסה הקודמת: 3.6 · <time datetime="2026-11-15T08:34:47+02:00">15.11.2026 בשעה 08:34</time></p><p class="langs"><a href="index.html" lang="ru">Русский</a><a href="he.html" lang="he" aria-current="page">עברית</a><a href="en.html" lang="en">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>נוירו-גן</h1><p class="mut small">צעדים קטנים. כל יום.</p></div>
@@ -668,12 +674,12 @@ function say(text,btn){
   else try{const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH;u.rate=.9;u.onend=u.onerror=reset;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){reset()}
 }
 
-/* ---------- helper: one 3D face that explains memory games aloud ----------
+/* ---------- helper: one 3D face that explains the games aloud ----------
    The voice is the browser's speech synthesis. The lips follow the text being spoken (letter by letter, re-synchronised
    on the browser's word-boundary events when it sends them), not the sound itself. The 3D module and the model are
-   loaded only when a memory game is opened; until then, and if 3D is not available, a simple drawn face is shown. */
+   loaded only when a game is opened; until then, and if 3D is not available, a simple drawn face is shown. */
 const HELP={api:null,cv:null,loading:false,failed:false,on:false,tok:0,timer:0,last:'',shape:''};
-const helpFor=g=>!!g&&g.cat==='mem';
+const helpFor=g=>!!g;
 const HSVG='<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="52" r="34" fill="#f2c9a0"/><path d="M17 46a33 33 0 0 1 66 0c-8-12-20-17-33-17S25 34 17 46z" fill="#6b4226"/><circle cx="38" cy="50" r="4" fill="#3b2a20"/><circle cx="62" cy="50" r="4" fill="#3b2a20"/><ellipse id="hmouth" cx="50" cy="69" rx="9" ry="1.5" fill="#a8483f"/></svg>';
 /* letters -> mouth shapes; Cyrillic is written as escapes so that the translation build does not take it for text */
 const VIS={};[['viseme_aa',.6,'\u0430\u044fa\u05d0\u05d4\u05e2'],['viseme_O',.6,'\u043e\u0451o\u05d5'],['viseme_U',.6,'\u0443\u044euw'],['viseme_E',.55,'\u044d\u0435e'],['viseme_I',.55,'\u0438\u044b\u0439iy\u05d9'],
@@ -721,6 +727,39 @@ function hSay(text,shown){
 }
 const helperHTML=()=>`<div class="helper" id="helper"><div class="hface" id="hslot"></div><div class="hbody"><p class="small mut">העוזרת של הגן</p><p id="hcap" aria-live="polite">שלום! אסביר את כללי המשחק הזה. לחצו על «הסבירי את הכללים».</p>
   <div class="row"><button data-act="hexplain">הסבירי את הכללים</button><button data-act="hrepeat">חזרי שוב</button><button class="pri" data-act="start">להתחיל</button></div></div></div>`;
+
+/* The level offered for the next round follows the last two finished rounds of this game: two excellent rounds
+   on one level move it up, two weak ones move it down, otherwise it stays where the player last played. */
+function advise(id){
+  const h=S.hist.filter(x=>x.g===id&&x.s!=null).slice(-2);if(!h.length)return{l:0,why:''};
+  const l=Math.min(4,Math.max(0,+h[h.length-1].l||0));
+  if(h.length===2&&h[0].l===l){
+    if(h[0].s>=85&&h[1].s>=85&&l<4)return{l:l+1,why:'up'};
+    if(h[0].s<50&&h[1].s<50&&l>0)return{l:l-1,why:'down'}}
+  return{l,why:''};
+}
+const ADV={up:'שני הסבבים האחרונים הצליחו מאוד, ולכן העוזרת ממליצה על רמה גבוהה יותר.',down:'שני הסבבים האחרונים היו קשים, ולכן העוזרת ממליצה על רמה קלה יותר.'};
+/* training with the helper: she leads through today's four exercises */
+let TR=null;
+const hRes=m=>`<div class="hmini" id="helper"><div class="hface" id="hslot"></div><span id="hcap" aria-live="polite">${esc(m)}</span><button data-act="hrepeat">חזרי שוב</button></div>`;
+function hAuto(t){HELP.last=t;if(!getUI().mute)hSay(t,true)}
+function trainText(){return `האימון הסתיים! תפוחים בשלים באימון הזה: ${TR.res.filter(x=>x.ok).length}. בואו מחר, העץ יחכה לכם.`}
+function vTrainEnd(){
+  return `<section class="card"><h2>האימון הסתיים</h2>${hRes(trainText())}
+  <div class="list">${TR.ids.map(id=>{const r=TR.res.filter(x=>x.g===id).pop();return `<div class="item">${illo(id)}<div><b>${esc(gname(id))}</b><br><span class="small mut">${CATS[GAMES[id].cat]}</span></div><span class="pill ${r&&r.ok?'on':''}">${r?r.s+'%':'לא הושלם'}</span></div>`}).join('')}</div>
+  <div class="row"><button class="pri" data-act="home">חזרה לגן</button></div></section>`;
+}
+function strengths(st){
+  return Object.keys(CATS).map(c=>{const h=(st.hist||[]).filter(x=>x.s!=null&&GAMES[x.g]&&GAMES[x.g].cat===c).slice(-10);
+    return{c,n:h.length,v:h.length?Math.round(h.reduce((a,x)=>a+x.s*(.6+.1*Math.min(4,+x.l||0)),0)/h.length):null}});
+}
+function strengthsHTML(st){
+  const m=strengths(st),full=m.filter(x=>x.n>=3).sort((a,b)=>b.v-a.v);
+  return `<section class="card" id="strengths"><h2>החוזקות שלי</h2>
+   <div class="list">${m.map(x=>`<div class="sbar" data-c="${x.c}"><div class="row between"><b>${CATS[x.c]}</b><span class="small mut">${x.v==null?'עדיין אין סבבים':x.v+' מתוך 100'}</span></div><div class="bar"><i style="width:${x.v||0}%"></i></div></div>`).join('')}</div>
+   <p id="sline">${full.length>=2&&full[0].v>full[full.length-1].v?`החזק ביותר כרגע: ${CATS[full[0].c]}. כדאי לתרגל: ${CATS[full[full.length-1].c]}.`:'שחקו שלושה סבבים בכל תחום, והמפה תהיה מדויקת יותר.'}</p>
+   <p class="small mut">מחושב לפי עשרת הסבבים האחרונים בכל תחום, בהתחשב ברמה. זו אינה אבחנה, אלא רמז מה כדאי לתרגל.</p></section>`;
+}
 
 /* ---------- games ---------- */
 const GAMES={};
@@ -1079,6 +1118,29 @@ game('gonogo','רק תפוח','att','לחצו כשאתם רואים תפוח א�
       show(ok,v){if(!ok){b.classList.add('bad');$('.hint',c.box).textContent=go?'זה היה תפוח, היה צריך ללחוץ.':'זה לא תפוח, לא היה צריך ללחוץ.'}else if(v)b.classList.add('good')}};
   });
 });
+game('dual','החלטה כפולה','att','שימו לב לפרי שבמרכז ולמקום שבו הבזיקה החיפושית.',
+ 'לרגע קצר יופיעו במרכז תפוח או אגס, ובקצה השדה תבזיק חיפושית. אחר כך ענו על שתי שאלות: איזה פרי היה במרכז והיכן הייתה החיפושית. שש הצגות.',c=>{
+  const ms=[900,650,450,320,220][c.lvl],N=[4,6,8,8,8][c.lvl],noise=[0,0,0,2,4][c.lvl],R=6;let round=0,good=0,err=0;
+  const at=i=>{const a=i/N*2*Math.PI-Math.PI/2;return `left:${(50+37*Math.cos(a)).toFixed(1)}%;top:${(50+37*Math.sin(a)).toFixed(1)}%`};
+  const next=()=>{
+    if(round===R)return c.done({score:Math.round(good/R*100),err});
+    round++;const fruit=rnd(2),bug=rnd(N),leaves=shuffle(range(N).filter(i=>i!==bug)).slice(0,noise);
+    c.box.innerHTML=`<p class="hint">הצגה ${round} מתוך ${R}. הביטו למרכז.</p><div class="dual"><span class="dc">+</span></div>`;
+    const f=$('.dual',c.box);
+    c.later(()=>{
+      f.innerHTML=`<span class="dc" data-f="${fruit}">${fruit?'🍐':'🍎'}</span><span class="dp" data-i="${bug}" style="${at(bug)}">🐞</span>`+leaves.map(i=>`<span class="dp" style="${at(i)}">🍃</span>`).join('');
+      c.later(()=>{f.innerHTML='<span class="dc">✳</span>';c.later(()=>{
+        c.box.innerHTML=`<p class="hint">איזה פרי היה במרכז?</p><div class="opts"><button data-f="0">🍎 תפוח</button><button data-f="1">🍐 אגס</button></div>`;
+        $$('[data-f]',c.box).forEach(b=>b.onclick=()=>{const okF=+b.dataset.f===fruit;
+          c.box.innerHTML=`<p class="hint">היכן הייתה החיפושית? לחצו על המקום הזה.</p><div class="dual">${range(N).map(i=>`<button class="dq" data-i="${i}" style="${at(i)}" aria-label="מקום ${i+1}"></button>`).join('')}</div>`;
+          $$('.dq',c.box).forEach(q=>q.onclick=()=>{const okP=+q.dataset.i===bug;
+            $$('.dq',c.box).forEach(x=>{x.disabled=true;if(+x.dataset.i===bug){x.classList.add('good');x.textContent='🐞'}});
+            if(!okP)q.classList.add('bad');
+            if(okF&&okP)good++;else err++;
+            $('.hint',c.box).textContent=okF&&okP?'נכון: גם הפרי וגם המקום.':!okF&&!okP?'הפרי היה אחר, והחיפושית הייתה במקום אחר.':okF?'החיפושית הייתה במקום אחר.':'המקום נכון, אבל הפרי היה אחר.';
+            c.later(next,1100)})})},220)},ms)},800);
+  };next();
+});
 function mkSudoku(k){
   const perm=shuffle([1,2,3,4]);let g=[[0,1,2,3],[2,3,0,1],[1,0,3,2],[3,2,1,0]].map(r=>r.map(v=>perm[v]));
   if(rnd(2))[g[0],g[1]]=[g[1],g[0]];if(rnd(2))[g[2],g[3]]=[g[3],g[2]];if(rnd(2))g=[g[2],g[3],g[0],g[1]];if(rnd(2))g=g[0].map((_,c)=>g.map(r=>r[c]));
@@ -1197,9 +1259,9 @@ game('light','מוזאיקת אור','log','הרכיבו דוגמה זוהרת �
     };
   };next();
 });
-const TRAINS2={basket:'את הזיכרון לרשימות',pairs:'את הזיכרון החזותי',back:'את זיכרון העבודה',order:'את הזיכרון לסדר',count:'את תשומת הלב',diff:'את כושר ההתבוננות',switch:'את גמישות הקשב',odd:'את חדות העין',gonogo:'את השליטה העצמית והתגובה',sudoku:'את ההיגיון',equation:'את החשבון בעל-פה',analogy:'את החשיבה המילולית',oddword:'את היכולת להכליל',deduce:'את ההסקה',rotate:'את הסיבוב בדמיון',route:'את ההתמצאות במרחב',light:'את היכולת לשלב'};
-const GL={basket:['🧺',30],pairs:['🃏',30],back:['3 2 1',18],order:['1→2→3',14],count:['🍎?',22],diff:['≠',34],switch:['⇄',34],odd:['ווזו',15],gonogo:['🍎',30],sudoku:['4×4',20],equation:['?+2',20],analogy:['א:ב',20],oddword:['אבג',20],deduce:['?',34],rotate:['↻',36],route:['↱',36],light:['✦',34]};
-const BYCAT={mem:['leaves','seq','gone','basket','pairs','back','order'],att:['schulte','arrow','color','count','diff','switch','odd','gonogo'],log:['series','water','sudoku','equation','analogy','oddword','deduce','light'],spa:['mirror','rotate','route']};
+const TRAINS2={basket:'את הזיכרון לרשימות',pairs:'את הזיכרון החזותי',back:'את זיכרון העבודה',order:'את הזיכרון לסדר',count:'את תשומת הלב',diff:'את כושר ההתבוננות',switch:'את גמישות הקשב',odd:'את חדות העין',gonogo:'את השליטה העצמית והתגובה',dual:'מהירות תפיסה ורוחב הקשב',sudoku:'את ההיגיון',equation:'את החשבון בעל-פה',analogy:'את החשיבה המילולית',oddword:'את היכולת להכליל',deduce:'את ההסקה',rotate:'את הסיבוב בדמיון',route:'את ההתמצאות במרחב',light:'את היכולת לשלב'};
+const GL={basket:['🧺',30],pairs:['🃏',30],back:['3 2 1',18],order:['1→2→3',14],count:['🍎?',22],diff:['≠',34],switch:['⇄',34],odd:['ווזו',15],gonogo:['🍎',30],dual:['🐞',30],sudoku:['4×4',20],equation:['?+2',20],analogy:['א:ב',20],oddword:['אבג',20],deduce:['?',34],rotate:['↻',36],route:['↱',36],light:['✦',34]};
+const BYCAT={mem:['leaves','seq','gone','basket','pairs','back','order'],att:['schulte','arrow','color','count','diff','switch','odd','gonogo','dual'],log:['series','water','sudoku','equation','analogy','oddword','deduce','light'],spa:['mirror','rotate','route']};
 const ORDER=Object.values(BYCAT).flat();
 const BIRD=['ציף-ציף! שמחה לראות אתכם בגן.','גם טיול באוויר הצח הוא חימום טוב למוח.','התקשרו היום לאדם קרוב: שיחה מעוררת את הזיכרון.','נסו משחק שעוד לא שיחקתם בו. דבר חדש תמיד מועיל.','כבר תרגלתם היום. העץ מרגיש את זה!'];
 const CHEERS=['כל הכבוד, המשיכו כך!','שמח לראות אתכם בגן כל יום.','תוצאה מצוינת השבוע!','בואו מחר, העץ מחכה לכם.'];
@@ -1248,7 +1310,7 @@ const NOP=['לא נורא. גם כל ניסיון הוא תרגול.','היום 
 const WISHES=['יום טוב לכל מי שבגן!','נעים לראות איך הגן שלנו צומח.','אתם לא לבד, אנחנו מתרגלים יחד.','שמרו על עצמכם ובואו מחר.'];
 
 /* ---------- play framework ---------- */
-function openGame(id){abandon();HELP.last='';G={g:GAMES[id],lvl:Math.min(4,S.lv[id]!=null?S.lv[id]:0),active:false,run:0,trial:false};route='play';bump('open');render();window.scrollTo(0,0)}
+function openGame(id){abandon();HELP.last='';const a=advise(id);G={g:GAMES[id],lvl:a.l,adv:a.why,active:false,run:0,trial:false};route='play';bump('open');render();window.scrollTo(0,0)}
 function startGame(){
   G.active=true;G.t0=Date.now();G.run++;const my=G.run,g=G.g;
   if(speaking)say('');hStop();if(G.trial)bump('trial');else{
@@ -1264,11 +1326,11 @@ function markDay(){if(S.lastDay!==DAY()){S.days++;S.lastDay=DAY()}}
 function finish(r){
   G.active=false;document.onkeydown=null;hStop();
   const d=Math.max(1,Math.round((Date.now()-G.t0)/1000)),ok=r.score>=60,id=G.g.id;
-  if(G.trial){G.res=Object.assign({d,ok,trial:1,msg:'סבב הניסיון הסתיים. עכשיו אפשר לשחק באמת.'},r);sfx('tap');render();return}
+  if(G.trial){G.res=Object.assign({d,ok,trial:1,msg:'סבב הניסיון הסתיים. עכשיו אפשר לשחק באמת.'},r);sfx('tap');render();hAuto(G.res.msg);return}
   S.hist.push({g:id,l:G.lvl,at:G.t0,d,s:r.score,ok});if(S.hist.length>150)S.hist=S.hist.slice(-150);
   S.sec+=d;S.cur=null;markDay();bump('fin');
   if(ok){S.apples++;S.lv[id]=Math.max(S.lv[id]||0,G.lvl);newApple=true;bump('ok')}
-  save();sfx(ok?'ok':'bad');G.res=Object.assign({d,ok,msg:(ok?OKP:NOP)[rnd(ok?OKP.length:NOP.length)]},r);render();
+  save();sfx(ok?'ok':'bad');G.res=Object.assign({d,ok,msg:(ok?OKP:NOP)[rnd(ok?OKP.length:NOP.length)]},r);if(TR)TR.res.push({g:id,s:r.score,ok});render();hAuto(G.res.msg);
 }
 function abandon(){
   hStop();
@@ -1282,17 +1344,17 @@ function vBreath(){
 function vPlay(){
   const g=G.g;
   if(G.res){const r=G.res;
-    if(r.trial)return `<section class="card"><h2>סבב ניסיון</h2><p>${esc(r.msg)}</p><p class="mut">התוצאה אינה נשמרת ואינה משפיעה על העץ.</p>
+    if(r.trial)return `<section class="card"><h2>סבב ניסיון</h2>${hRes(r.msg)}<p class="mut">התוצאה אינה נשמרת ואינה משפיעה על העץ.</p>
     <div class="tiles"><div class="tile"><b>${r.score}%</b><span>תוצאה</span></div><div class="tile"><b>${dur(r.d)}</b><span>זמן</span></div><div class="tile"><b>${r.err}</b><span>טעויות</span></div></div>
     ${r.explain?`<p class="note">${esc(r.explain)}</p>`:''}
     <div class="row"><button class="pri" data-act="real">לשחק באמת</button><button data-act="again">עוד סבב ניסיון</button><button data-act="home">חזרה לגן</button></div></section>`;
     return `<section class="card"><h2>${r.ok?'התפוח הבשיל!':'הסבב הסתיים'}</h2>
-    ${scene(treeSVG(S,{fruits:fruitsOf(S),fresh:true}))}<p>${esc(r.msg)}</p><p class="mut">${r.ok?'על העץ שלכם צמח תפוח בשל חדש.':'התפוח עדיין ירוק. אפשר לנסות שוב או לבחור רמה קלה יותר.'}</p>${notice?`<p class="note" role="status" id="savenote">${esc(notice)}</p>`:''}
+    ${scene(treeSVG(S,{fruits:fruitsOf(S),fresh:true}))}${hRes(r.msg)}<p class="mut">${r.ok?'על העץ שלכם צמח תפוח בשל חדש.':'התפוח עדיין ירוק. אפשר לנסות שוב או לבחור רמה קלה יותר.'}</p>${notice?`<p class="note" role="status" id="savenote">${esc(notice)}</p>`:''}
     <div class="tiles"><div class="tile"><b>${r.score}%</b><span>תוצאה</span></div><div class="tile"><b>${dur(r.d)}</b><span>זמן</span></div><div class="tile"><b>${r.err}</b><span>טעויות</span></div><div class="tile"><b>${G.lvl+1} מתוך 5</b><span>רמה</span></div></div>
     ${r.explain?`<p class="note" id="expl" hidden>${esc(r.explain)}</p>`:''}
-    <div class="row"><button class="pri" data-act="again">לחזור</button>${r.ok&&G.lvl<4?'<button data-act="nextlvl">הרמה הבאה</button>':''}${r.explain?'<button data-act="explain">להציג הסבר</button>':''}<button data-act="home">חזרה לגן</button>${sayBtn(r.msg)}</div></section>`}
-  return `<section class="card"><div class="row">${illo(g.id,1)}<div style="flex:1 1 160px"><p class="mut small">${CATS[g.cat]}</p><h2>${esc(g.name)}</h2><p class="small mut">מאמן ${TRAINS[g.id]}</p></div></div>${helpFor(g)?helperHTML():''}<p>${esc(g.how)}</p>
-   <div><p class="small mut">רמת קושי</p><div class="chips">${range(5).map(i=>`<button data-act="lvl" data-l="${i}" aria-pressed="${i===G.lvl}">${i+1}</button>`).join('')}</div></div>
+    <div class="row">${TR?`<button class="pri" data-act="tnext">${TR.i+1<TR.ids.length?'הלאה':'לסיים את האימון'}</button>`:''}<button class="${TR?'':'pri'}" data-act="again">לחזור</button>${r.ok&&G.lvl<4?'<button data-act="nextlvl">הרמה הבאה</button>':''}${r.explain?'<button data-act="explain">להציג הסבר</button>':''}<button data-act="home">חזרה לגן</button></div></section>`}
+  return `<section class="card">${TR?`<p class="small" id="trstep"><b>אימון עם העוזרת</b> · שלב ${TR.i+1} מתוך ${TR.ids.length}</p>`:''}<div class="row">${illo(g.id,1)}<div style="flex:1 1 160px"><p class="mut small">${CATS[g.cat]}</p><h2>${esc(g.name)}</h2><p class="small mut">מאמן ${TRAINS[g.id]}</p></div></div>${helpFor(g)?helperHTML():''}<p>${esc(g.how)}</p>
+   <div><p class="small mut">רמת קושי</p><div class="chips">${range(5).map(i=>`<button data-act="lvl" data-l="${i}" aria-pressed="${i===G.lvl}">${i+1}</button>`).join('')}</div>${G.adv?`<p class="small mut" id="adv">${ADV[G.adv]}</p>`:''}</div>
    <div class="row">${helpFor(g)?'':'<button class="pri" data-act="start">להתחיל</button>'}<button data-act="trial">סבב ניסיון</button>${helpFor(g)?'':sayBtn(g.name+'. '+g.how)}<button data-act="home">חזרה לגן</button></div><p class="small mut">סבב ניסיון אינו נשמר ואינו משפיע על העץ. אם יוצאים ממשחק אמיתי לפני הסוף, על העץ נשאר תפוח נגוס.</p></section>`;
 }
 
@@ -1412,6 +1474,7 @@ function vGarden(){
     <div><p class="small mut">יעד היום: 3 תרגילים. בוצעו ${Math.min(tdy,3)} מתוך 3.</p><div class="bar"><i style="width:${Math.min(100,tdy/3*100).toFixed(0)}%"></i></div></div>
     <p class="small mut">על הענפים 12 הפירות האחרונים. תפוח אדום: הסבב הושלם בהצלחה. ירוק: תוצאה מתחת ל-60%. נגוס: המשחק לא הושלם. הציפור מגיעה בימי תרגול, והפרפרים בזכות ההשקיה.</p></section>
   <section class="card"><h2>התרגול שלי היום</h2><p class="mut">ארבעה תרגילים קצרים: זיכרון, קשב, היגיון ומרחב.</p>
+    <div class="row"><button class="pri" data-act="train">▶ אימון עם העוזרת</button></div><p class="small mut">העוזרת תוביל אתכם בכל ארבעת התרגילים ותסביר את הכללים בקול.</p>
     <div class="list">${rec.map(id=>{const g=GAMES[id];return `<div class="item">${illo(id)}<div><b>${esc(g.name)}</b><br><span class="small mut">${CATS[g.cat]}${doneToday(id)?' · בוצע היום ✓':''}</span></div><button class="${doneToday(id)?'':'pri'}" data-act="open" data-g="${id}">${doneToday(id)?'פעם נוספת':'להתחיל'}</button></div>`}).join('')}</div></section>
   <section class="card"><h2>השבועיים שלי</h2>${calendar()}<p class="small mut">ימים עם תרגול מסומנים בירוק. ימים שדילגתם עליהם לא גורעים דבר: העץ פשוט מחכה לכם.</p></section>
   <section class="card"><h2>הפרסים שלי</h2>${awardsHTML(S)}</section>
@@ -1419,7 +1482,7 @@ function vGarden(){
 }
 function vGames(){
   const ids=ORDER.filter(id=>catF==='all'||GAMES[id].cat===catF);
-  return `<section class="card"><h2>כל התרגילים</h2><p class="mut">26 משחקים, בכל אחד חמש רמות.</p>
+  return `<section class="card"><h2>כל התרגילים</h2><p class="mut">27 משחקים, בכל אחד חמש רמות.</p>
   <div class="chips">${[['all','הכול'],...Object.entries(CATS)].map(c=>`<button data-act="catf" data-c="${c[0]}" aria-pressed="${catF===c[0]}">${c[1]}</button>`).join('')}</div>
   <div class="list">${ids.map(id=>{const g=GAMES[id],l=S.lv[id];return `<div class="item">${illo(id)}<div><b>${esc(g.name)}</b><br><span class="small mut">${CATS[g.cat]} · מאמן ${TRAINS[id]}.${l!=null?` רמה שהושלמה ${l+1}.`:''}</span></div><button class="pri" data-act="open" data-g="${id}">לשחק</button></div>`}).join('')}</div></section>`;
 }
@@ -1430,6 +1493,7 @@ function vProgress(){
   return `<section class="card"><h2>ההתקדמות שלי</h2>
    <div class="tiles"><div class="tile"><b>${fin.length}</b><span>סבבים הושלמו</span></div><div class="tile"><b>${S.apples}</b><span>תפוחים</span></div><div class="tile"><b>${S.days}</b><span>ימים עם תרגול</span></div><div class="tile"><b>${Math.round(S.sec/60)} דק׳</b><span>בתרגילים</span></div></div>
    ${rows?`<div class="scroll"><table><thead><tr><th>תרגיל</th><th>סבבים</th><th>התוצאה הטובה ביותר</th><th>רמה שהושלמה</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="mut">כאן יופיעו תוצאות אחרי המשחק הראשון.</p>'}</section>
+  ${strengthsHTML(S)}
   <section class="card"><h2>היסטוריית התרגול</h2>
    ${S.hist.length?`<div class="list">${S.hist.slice(-30).reverse().map(h=>`<div class="item"><div><b>${esc(gname(h.g))}</b><br><span class="small mut">${when(h.at)} · רמה ${h.l+1}${h.d?' · '+dur(h.d):''}</span></div><span class="pill ${h.ok?'on':''}">${h.s==null?'לא הושלם':h.s+'%'}</span></div>`).join('')}</div>`:'<p class="mut">עדיין ריק.</p>'}
    <div class="row"><button data-act="copymine">להעתיק את התוצאות שלי</button><span id="copied" class="small mut" role="status"></span></div></section>`;
@@ -1549,11 +1613,11 @@ function vPrefs(){
 const ROUTES={garden:['הגן שלי',vGarden],games:['תרגילים',vGames],progress:['התקדמות',vProgress],common:['הגן המשותף',vCommon],admin:['הלוח של רומן',vAdmin],prefs:['הגדרות',vPrefs]};
 function render(){
   $('#nav').innerHTML=Object.entries(ROUTES).filter(([k])=>k!=='admin'||isOwner||sbOK).map(([k,v])=>`<a href="#${k}" ${route===k?'aria-current="page"':''}>${v[0]}</a>`).join('');
-  $('#main').innerHTML=route==='play'&&G?vPlay():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
+  $('#main').innerHTML=route==='play'&&G?vPlay():route==='play'&&TR&&TR.done?vTrainEnd():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
   hMount();
   if(route!=='garden'&&route!=='play')notice='';   /* a save that failed on the result screen must still be reported */
 }
-function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
+function go(){TR=null;wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
 window.addEventListener('hashchange',go);
 
 /* ---------- actions ---------- */
@@ -1577,11 +1641,15 @@ const ACT={
   },
   csvall(){copy(['משתתף;תאריך;תרגיל;רמה;שניות;תוצאה;מצב'].concat(people.flatMap(p=>(Array.isArray(p.hist)?p.hist:[]).map(h=>[String(p.nick||'').replace(/;/g,','),new Date(h.at).toISOString(),gname(h.g),h.l+1,h.d||0,h.s==null?'':h.s,h.s==null?'ננטש':h.ok?'בשל':'ירוק'].join(';')))).join('\n'))},
   rename(){const v=$('#nick2').value.trim().slice(0,24);if(!v)return;S.nick=v;save();render()},
-  open(e){openGame(e.dataset.g)},
+  open(e){TR=null;openGame(e.dataset.g)},
+  train(){TR={ids:todays(),i:0,res:[]};openGame(TR.ids[0]);hAuto(G.g.name+'. '+G.g.how)},
+  tnext(){if(!TR)return;TR.i++;
+    if(TR.i<TR.ids.length){openGame(TR.ids[TR.i]);hAuto(G.g.name+'. '+G.g.how)}
+    else{abandon();TR.done=true;render();window.scrollTo(0,0);hAuto(trainText())}},
   lvl(e){G.lvl=+e.dataset.l;render()},
   start(){G.trial=false;startGame()},
   hexplain(){hSay(G.g.name+'. '+G.g.how,true)},
-  hrepeat(){const r=G.g.name+'. '+G.g.how,t=HELP.last||r;hSay(t,t===r&&!G.active)},
+  hrepeat(){if(!G){hSay(HELP.last,true);return}const r=G.g.name+'. '+G.g.how,t=HELP.last||r;hSay(t,!!G.res||(t===r&&!G.active))},
   hhint(){hSay(G.g.desc)},
   again(){G.res=null;startGame()},
   nextlvl(){G.res=null;G.lvl=Math.min(4,G.lvl+1);startGame()},
