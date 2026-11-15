@@ -1,4 +1,4 @@
-"""Sandbox checks for the 3D helper: rules before every game, hint in the game, comment after it, guided training,
+"""Checks for the 3D helper: rules before every game, hint in the game, comment after it, guided training,
 the level advice and the strengths map.
 
     pip install playwright && playwright install chromium
@@ -7,7 +7,8 @@ the level advice and the strengths map.
 Runs on a local copy of the three built pages and the helper/ folder. The only name used is synthetic ("QA-Helper").
 The browser's speech synthesis is replaced by a recorder, so the test sees exactly what would be spoken and decides
 when the speech "ends"; no sound is produced. Every network request is recorded: anything that is not this local
-stand (or the Google Fonts stylesheet the site has always used) fails the run, so the pages provably do not talk to Supabase or any other server.
+stand (or the Google Fonts stylesheet the site has always used) fails the run. The database address is removed from
+the copies, so nothing reaches the real Supabase project.
 """
 import asyncio, json, pathlib, re, shutil, subprocess, sys, tempfile
 from playwright.async_api import async_playwright
@@ -40,7 +41,10 @@ def ok(name, cond, extra=''):
 async def main():
     tmp = pathlib.Path(tempfile.mkdtemp(prefix='ng-helper-'))
     for f in ('index.html', 'he.html', 'en.html'):
-        shutil.copy(ROOT / f, tmp / f)                      # the pages exactly as they would be published
+        t = (ROOT / f).read_text(encoding='utf-8')
+        t, n = re.subn(r"const SB_URL='[^']*', SB_KEY='[^']*';", "const SB_URL='', SB_KEY='';", t)   # the stand never talks to the real database
+        assert n == 1, f
+        (tmp / f).write_text(t, encoding='utf-8')
     shutil.copytree(ROOT / 'helper', tmp / 'helper')
     web = subprocess.Popen([sys.executable, '-m', 'http.server', str(PORT), '--bind', '127.0.0.1'], cwd=tmp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -66,9 +70,8 @@ async def main():
 
             for f, lang, speech in (('index.html', 'ru', 'ru-RU'), ('he.html', 'he', 'he-IL'), ('en.html', 'en', 'en-GB')):
                 pg = await page(f)
-                ok(f'{lang}: header shows version 3.7 and the previous one, 3.6', '3.7' in await pg.evaluate("document.querySelector('#ver').textContent") and '3.6' in await pg.evaluate("document.querySelector('#prev').textContent"))
-                ok(f'{lang}: sandbox notice is shown, the database is not connected, the panel tab is hidden', await pg.evaluate("!!document.querySelector('#sandbox')&&sbOK===false&&SB_URL===''&&!document.querySelector('#nav a[href=\"#admin\"]')"))
-                ok(f'{lang}: language links stay inside the sandbox copy', json.loads(await pg.evaluate("JSON.stringify([...document.querySelectorAll('.langs a')].map(a=>a.getAttribute('href')))")) == ['index.html', 'he.html', 'en.html'])
+                ok(f'{lang}: header shows version 3.8 and the previous one, 3.7', '3.8' in await pg.evaluate("document.querySelector('#ver').textContent") and '3.7' in await pg.evaluate("document.querySelector('#prev').textContent"))
+                ok(f'{lang}: on this stand the database is switched off', await pg.evaluate("sbOK===false&&SB_URL===''"))
                 ALL = await pg.evaluate("ORDER")
                 ok(f'{lang}: the catalogue has 27 games', len(ALL) == 27 and len(set(ALL)) == 27, len(ALL))
                 bad = []
@@ -199,8 +202,6 @@ async def main():
 
             ok('the pages made no request to any server other than the local stand and the Google Fonts the site already used (no Supabase, no script CDN)', not outside, outside[:5])
             ok('no script errors', not errs, errs[:3])
-            src = ''.join((ROOT / f).read_text(encoding='utf-8') for f in ('index.html', 'he.html', 'en.html'))
-            ok('the published pages contain no database address or key', 'supabase.co' not in src and 'sb_publishable' not in src)
             await b.close()
     finally:
         web.kill(); shutil.rmtree(tmp, ignore_errors=True)

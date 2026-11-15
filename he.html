@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>נוירו-גן: ארגז חול</title>
+<title>נוירו-גן 2.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Frank+Ruhl+Libre:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -249,14 +249,13 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
-<!--NGTOP--><div class="top" id="vers"><p><b id="ver">גרסה 3.7</b> · עודכנה <time datetime="2026-11-15T09:43:40+02:00">15.11.2026 בשעה 09:43</time> <span class="mut">(שעון ישראל)</span></p><p class="mut" id="prev">הגרסה הקודמת: 3.6 · <time datetime="2026-11-15T08:34:47+02:00">15.11.2026 בשעה 08:34</time></p><p class="langs"><a href="index.html" lang="ru">Русский</a><a href="he.html" lang="he" aria-current="page">עברית</a><a href="en.html" lang="en">English</a></p></div><!--/NGTOP-->
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">גרסה 3.8</b> · עודכנה <time datetime="2026-11-15T11:17:58+02:00">15.11.2026 בשעה 11:17</time> <span class="mut">(שעון ישראל)</span></p><p class="mut" id="prev">הגרסה הקודמת: 3.7 · <time datetime="2026-11-15T09:43:40+02:00">15.11.2026 בשעה 09:43</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he" aria-current="page">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>נוירו-גן</h1><p class="mut small">צעדים קטנים. כל יום.</p></div>
       <div class="row" style="flex:none;flex-wrap:nowrap"><button id="aplus" data-act="big" aria-pressed="false" aria-label="טקסט גדול">A+</button></div>
     </div>
   </header>
-  <p class="note small" id="sandbox">ארגז חול: גרסת ניסיון עם העוזרת. הנתונים נשארים רק במכשיר הזה, מסד הנתונים המשותף אינו מחובר.</p>
   <nav id="nav" aria-label="מדורים"></nav>
   <main id="main"><section class="card"><p>פותחים את הגן…</p></section></main>
   <footer>יוזמה של רומן לוינגרד · חינם, בלי מנוי · תרגול קשב וזיכרון. לא אבחון ולא טיפול.</footer>
@@ -267,7 +266,7 @@ const LOC='he-IL', TTS_LANG='he', SPEECH='he-IL';
 /* ---------- optional own backend (Supabase) ----------
    Fill in both values to let anyone play under a name without sign-in.
    SB_KEY is the project's publishable (public) key. Used only outside Claude. See supabase.sql. */
-const SB_URL='', SB_KEY='';   /* sandbox branch: the shared database is not connected; the real values live in main */
+const SB_URL='https://yzfaysleelxddpbmowyd.supabase.co', SB_KEY='sb_publishable_l9nkMqtiYoi704wSm-wdRA_hNHLBDZj';
 let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminMsg='', AU=null, AD={state:'out',google:null,assigned:null};
 async function rpc(fn,args,bearer){
   const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);

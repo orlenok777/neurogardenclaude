@@ -36,7 +36,7 @@ def top_block(lang, cur, prev):
         d = datetime.fromisoformat(r['at']).astimezone(TZ)
         return f'<time datetime="{d.isoformat()}">{L["when"](d)}</time>'
     links = ''.join(
-        f'<a href="{v["file"]}" lang="{k}"{" aria-current=\"page\"" if k == lang else ""}>{v["name"]}</a>'
+        f'<a href="{SITE}{"" if k == "ru" else v["file"]}" lang="{k}"{" aria-current=\"page\"" if k == lang else ""}>{v["name"]}</a>'
         for k, v in LANGS.items())
     return ('<!--NGTOP--><div class="top" id="vers">'
             f'<p><b id="ver">{L["ver"]} {cur["version"]}</b> · {L["upd"]} {stamp(cur)} <span class="mut">({L["tz"]})</span></p>'
