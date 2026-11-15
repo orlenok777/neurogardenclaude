@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>נוירו-גן 2.0</title>
+<title>נוירו-גן: ארגז חול</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Frank+Ruhl+Libre:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -32,6 +32,14 @@ html.hc{--bg:#ffffff;--card:#ffffff;--ink:#000000;--mut:#2b2b2b;--line:#000000;-
 html.hc[data-theme="dark"]{--bg:#000000;--card:#000000;--ink:#ffffff;--mut:#e8e8e8;--line:#ffffff;--leaf:#8ff0b0;--onleaf:#000000;--apple:#ff8a80;--ok:#8ff0b0}
 html.hc button,html.hc input,html.hc select,html.hc .card,html.hc .tile,html.hc .pill{border-width:2px}
 html.hc :focus-visible{outline:4px solid var(--ink);outline-offset:2px}
+.helper{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:var(--bg);border:1.5px solid var(--line);border-radius:18px;padding:12px}
+.hface{flex:none;width:150px;height:150px;border-radius:50%;overflow:hidden;background:linear-gradient(#dcefe0,#f7f1e6);border:2px solid var(--line)}
+.hface canvas,.hface svg{width:100%;height:100%;display:block}
+.hbody{flex:1 1 180px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.hbody p{margin:0}
+.hmini{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.hmini .hface{width:60px;height:60px}
+.hmini #hcap{flex:1 1 160px}
 *{box-sizing:border-box}
 html{font-size:19px}
 html.big{font-size:23px}
@@ -235,13 +243,14 @@ h3{margin-top:6px}
 <linearGradient id="gTrunk" x1="0" x2="1"><stop offset="0" stop-color="#6b4a2f"/><stop offset=".5" stop-color="#916846"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
 </defs></svg>
 <div class="wrap">
-<!--NGTOP--><div class="top" id="vers"><p><b id="ver">גרסה 3.5</b> · עודכנה <time datetime="2026-11-13T14:39:29+02:00">13.11.2026 בשעה 14:39</time> <span class="mut">(שעון ישראל)</span></p><p class="mut" id="prev">הגרסה הקודמת: 3.4 · <time datetime="2026-11-13T11:49:05+02:00">13.11.2026 בשעה 11:49</time></p><p class="langs"><a href="https://orlenok777.github.io/neurogardenclaude/" lang="ru">Русский</a><a href="https://orlenok777.github.io/neurogardenclaude/he.html" lang="he" aria-current="page">עברית</a><a href="https://orlenok777.github.io/neurogardenclaude/en.html" lang="en">English</a></p></div><!--/NGTOP-->
+<!--NGTOP--><div class="top" id="vers"><p><b id="ver">גרסה 3.6</b> · עודכנה <time datetime="2026-11-15T08:34:47+02:00">15.11.2026 בשעה 08:34</time> <span class="mut">(שעון ישראל)</span></p><p class="mut" id="prev">הגרסה הקודמת: 3.5 · <time datetime="2026-11-13T14:39:29+02:00">13.11.2026 בשעה 14:39</time></p><p class="langs"><a href="index.html" lang="ru">Русский</a><a href="he.html" lang="he" aria-current="page">עברית</a><a href="en.html" lang="en">English</a></p></div><!--/NGTOP-->
   <header class="top">
     <div class="row between" style="flex-wrap:nowrap;align-items:flex-start">
       <div style="min-width:0"><h1>נוירו-גן</h1><p class="mut small">צעדים קטנים. כל יום.</p></div>
       <div class="row" style="flex:none;flex-wrap:nowrap"><button id="aplus" data-act="big" aria-pressed="false" aria-label="טקסט גדול">A+</button></div>
     </div>
   </header>
+  <p class="note small" id="sandbox">ארגז חול: גרסת ניסיון עם העוזרת. הנתונים נשארים רק במכשיר הזה, מסד הנתונים המשותף אינו מחובר.</p>
   <nav id="nav" aria-label="מדורים"></nav>
   <main id="main"><section class="card"><p>פותחים את הגן…</p></section></main>
   <footer>יוזמה של רומן לוינגרד · חינם, בלי מנוי · תרגול קשב וזיכרון. לא אבחון ולא טיפול.</footer>
@@ -252,7 +261,7 @@ const LOC='he-IL', TTS_LANG='he', SPEECH='he-IL';
 /* ---------- optional own backend (Supabase) ----------
    Fill in both values to let anyone play under a name without sign-in.
    SB_KEY is the project's publishable (public) key. Used only outside Claude. See supabase.sql. */
-const SB_URL='https://yzfaysleelxddpbmowyd.supabase.co', SB_KEY='sb_publishable_l9nkMqtiYoi704wSm-wdRA_hNHLBDZj';
+const SB_URL='', SB_KEY='';   /* sandbox branch: the shared database is not connected; the real values live in main */
 let sbOK=!!(SB_URL&&SB_KEY)&&!(window.claude&&window.claude.use), KEY='', MY={}, cheerBy={}, adminMsg='', AU=null, AD={state:'out',google:null,assigned:null};
 async function rpc(fn,args,bearer){
   const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),12000);
@@ -658,6 +667,60 @@ function say(text,btn){
   if(tts)tts.speak(text,{language:TTS_LANG,rate:.9}).then(reset,e=>{reset();if(e&&(e.code==='not_granted'||e.code==='unavailable')){ttsOff=true;$$('[data-act=say]').forEach(b=>b.remove())}});
   else try{const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH;u.rate=.9;u.onend=u.onerror=reset;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){reset()}
 }
+
+/* ---------- helper: one 3D face that explains memory games aloud ----------
+   The voice is the browser's speech synthesis. The lips follow the text being spoken (letter by letter, re-synchronised
+   on the browser's word-boundary events when it sends them), not the sound itself. The 3D module and the model are
+   loaded only when a memory game is opened; until then, and if 3D is not available, a simple drawn face is shown. */
+const HELP={api:null,cv:null,loading:false,failed:false,on:false,tok:0,timer:0,last:'',shape:''};
+const helpFor=g=>!!g&&g.cat==='mem';
+const HSVG='<svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="52" r="34" fill="#f2c9a0"/><path d="M17 46a33 33 0 0 1 66 0c-8-12-20-17-33-17S25 34 17 46z" fill="#6b4226"/><circle cx="38" cy="50" r="4" fill="#3b2a20"/><circle cx="62" cy="50" r="4" fill="#3b2a20"/><ellipse id="hmouth" cx="50" cy="69" rx="9" ry="1.5" fill="#a8483f"/></svg>';
+/* letters -> mouth shapes; Cyrillic is written as escapes so that the translation build does not take it for text */
+const VIS={};[['viseme_aa',.6,'\u0430\u044fa\u05d0\u05d4\u05e2'],['viseme_O',.6,'\u043e\u0451o\u05d5'],['viseme_U',.6,'\u0443\u044euw'],['viseme_E',.55,'\u044d\u0435e'],['viseme_I',.55,'\u0438\u044b\u0439iy\u05d9'],
+  ['viseme_PP',1,'\u043c\u0431\u043fmbp\u05de\u05dd\u05d1\u05e4\u05e3'],['viseme_FF',.7,'\u0444\u0432fv'],['viseme_SS',.6,'\u0441\u0437\u0446szc\u05e1\u05d6\u05e6\u05e5'],['viseme_CH',.6,'\u0448\u0449\u0447\u0436jx\u05e9'],
+  ['viseme_DD',.5,'\u0442\u0434td\u05ea\u05d3\u05d8'],['viseme_kk',.5,'\u043a\u0433\u0445kgqh\u05db\u05da\u05e7\u05d2\u05d7'],['viseme_nn',.5,'\u043d\u043bnl\u05e0\u05df\u05dc'],['viseme_RR',.5,'\u0440r\u05e8']]
+  .forEach(([sh,a,cs])=>[...cs].forEach(ch=>VIS[ch]=[sh,a]));
+function hMouth(shape,amt){
+  HELP.shape=shape||'';if(HELP.api)HELP.api.set(shape,amt);
+  const m=$('#hmouth');if(m)m.setAttribute('ry',shape&&shape!=='viseme_PP'?(2+9*amt).toFixed(1):'1.5');
+}
+function hMount(){
+  const slot=$('#hslot');
+  if(!slot){if(HELP.api)HELP.api.stop();return}
+  if(HELP.api){if(HELP.cv.parentNode!==slot)slot.replaceChildren(HELP.cv);HELP.api.still(document.documentElement.classList.contains('still'));HELP.api.start();return}
+  if(!slot.firstChild)slot.innerHTML=HSVG;
+  if(HELP.failed||HELP.loading)return;
+  HELP.loading=true;
+  (async()=>{try{
+    const cv=document.createElement('canvas');cv.setAttribute('aria-hidden','true');
+    const mod=await import('./helper/helper3d.js');
+    HELP.api=await mod.mount(cv,'./helper/helper.glb');HELP.cv=cv;hMount();
+  }catch(e){HELP.failed=true}HELP.loading=false})();
+}
+function hStop(){
+  if(HELP.on){HELP.on=false;HELP.tok++;clearInterval(HELP.timer);if(tts)tts.stop().catch(()=>{});else try{speechSynthesis.cancel()}catch(e){}}
+  hMouth(null,0);
+}
+function hSay(text,shown){
+  if(speaking)say('');hStop();if(!text)return;
+  HELP.last=text;const cap=$('#hcap');if(cap&&!shown)cap.textContent=text;   /* shown: these words are already written on the screen */
+  if(!canSay())return;                     /* no voice in this browser: the words stay on screen */
+  const tok=++HELP.tok,cps=SPEECH==='he-IL'?11:14,limit=text.length/cps*2000+4000;let base=0,t0=performance.now();const began=t0;
+  const end=()=>{if(HELP.tok===tok)hStop()};
+  HELP.on=true;
+  HELP.timer=setInterval(()=>{
+    const now=performance.now();if(now-began>limit){HELP.on=false;clearInterval(HELP.timer);hMouth(null,0);return}
+    const ch=text[Math.floor(base+(now-t0)/1000*cps)];
+    if(ch===undefined)hMouth(Math.floor(now/150)%2?'viseme_aa':null,.3);   /* the voice is slower than the estimate */
+    else{const v=VIS[ch.toLowerCase()];hMouth(v?v[0]:null,v?v[1]:0)}
+  },60);
+  if(tts)tts.speak(text,{language:TTS_LANG,rate:.9}).then(end,end);
+  else try{const u=new SpeechSynthesisUtterance(text);u.lang=SPEECH;u.rate=.9;
+    u.onboundary=e=>{if(HELP.tok===tok&&typeof e.charIndex==='number'){base=e.charIndex;t0=performance.now()}};
+    u.onend=u.onerror=end;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){end()}
+}
+const helperHTML=()=>`<div class="helper" id="helper"><div class="hface" id="hslot"></div><div class="hbody"><p class="small mut">העוזרת של הגן</p><p id="hcap" aria-live="polite">שלום! אסביר את כללי המשחק הזה. לחצו על «הסבירי את הכללים».</p>
+  <div class="row"><button data-act="hexplain">הסבירי את הכללים</button><button data-act="hrepeat">חזרי שוב</button><button class="pri" data-act="start">להתחיל</button></div></div></div>`;
 
 /* ---------- games ---------- */
 const GAMES={};
@@ -1185,20 +1248,21 @@ const NOP=['לא נורא. גם כל ניסיון הוא תרגול.','היום 
 const WISHES=['יום טוב לכל מי שבגן!','נעים לראות איך הגן שלנו צומח.','אתם לא לבד, אנחנו מתרגלים יחד.','שמרו על עצמכם ובואו מחר.'];
 
 /* ---------- play framework ---------- */
-function openGame(id){abandon();G={g:GAMES[id],lvl:Math.min(4,S.lv[id]!=null?S.lv[id]:0),active:false,run:0,trial:false};route='play';bump('open');render();window.scrollTo(0,0)}
+function openGame(id){abandon();HELP.last='';G={g:GAMES[id],lvl:Math.min(4,S.lv[id]!=null?S.lv[id]:0),active:false,run:0,trial:false};route='play';bump('open');render();window.scrollTo(0,0)}
 function startGame(){
   G.active=true;G.t0=Date.now();G.run++;const my=G.run,g=G.g;
-  if(speaking)say('');if(G.trial)bump('trial');else{
+  if(speaking)say('');hStop();if(G.trial)bump('trial');else{
     /* a round left by another tab: record it as not finished; if that tab is still playing, its result replaces this record on merge */
     if(S.cur)S.hist.push({g:S.cur.g,l:S.cur.l,at:S.cur.at,d:0,s:null,ok:false});
     S.cur={g:g.id,l:G.lvl,at:G.t0,sid:SID};bump('start')}save();
-  $('#main').innerHTML=`<section class="card"><div class="row between"><h2>${esc(g.name)}</h2><button data-act="quit">לצאת מהמשחק</button></div><p class="mut">רמה ${G.lvl+1} מתוך 5</p><div id="box" class="list"></div></section>`;
+  $('#main').innerHTML=`<section class="card"><div class="row between"><h2>${esc(g.name)}</h2><button data-act="quit">לצאת מהמשחק</button></div><p class="mut">רמה ${G.lvl+1} מתוך 5</p>${helpFor(g)?`<div class="hmini" id="helper"><div class="hface" id="hslot"></div><button data-act="hhint">💡 רמז</button><span id="hcap" class="small mut" aria-live="polite"></span></div>`:''}<div id="box" class="list"></div></section>`;
+  hMount();
   const ctx={lvl:G.lvl,box:$('#box'),later:(f,ms)=>setTimeout(()=>{if(G&&G.run===my&&G.active)f()},ms),done:r=>{if(G&&G.run===my&&G.active){if(ctx.stop)ctx.stop();finish(r)}}};
   G.ctx=ctx;g.run(ctx);
 }
 function markDay(){if(S.lastDay!==DAY()){S.days++;S.lastDay=DAY()}}
 function finish(r){
-  G.active=false;document.onkeydown=null;
+  G.active=false;document.onkeydown=null;hStop();
   const d=Math.max(1,Math.round((Date.now()-G.t0)/1000)),ok=r.score>=60,id=G.g.id;
   if(G.trial){G.res=Object.assign({d,ok,trial:1,msg:'סבב הניסיון הסתיים. עכשיו אפשר לשחק באמת.'},r);sfx('tap');render();return}
   S.hist.push({g:id,l:G.lvl,at:G.t0,d,s:r.score,ok});if(S.hist.length>150)S.hist=S.hist.slice(-150);
@@ -1207,6 +1271,7 @@ function finish(r){
   save();sfx(ok?'ok':'bad');G.res=Object.assign({d,ok,msg:(ok?OKP:NOP)[rnd(ok?OKP.length:NOP.length)]},r);render();
 }
 function abandon(){
+  hStop();
   if(G&&G.active){G.active=false;document.onkeydown=null;if(G.ctx&&G.ctx.stop)G.ctx.stop();
     if(!G.trial){S.hist.push({g:G.g.id,l:G.lvl,at:G.t0,d:Math.round((Date.now()-G.t0)/1000),s:null,ok:false,q:1});if(S.hist.length>150)S.hist=S.hist.slice(-150);S.cur=null;bump('quit');save()}}
   G=null;
@@ -1226,9 +1291,9 @@ function vPlay(){
     <div class="tiles"><div class="tile"><b>${r.score}%</b><span>תוצאה</span></div><div class="tile"><b>${dur(r.d)}</b><span>זמן</span></div><div class="tile"><b>${r.err}</b><span>טעויות</span></div><div class="tile"><b>${G.lvl+1} מתוך 5</b><span>רמה</span></div></div>
     ${r.explain?`<p class="note" id="expl" hidden>${esc(r.explain)}</p>`:''}
     <div class="row"><button class="pri" data-act="again">לחזור</button>${r.ok&&G.lvl<4?'<button data-act="nextlvl">הרמה הבאה</button>':''}${r.explain?'<button data-act="explain">להציג הסבר</button>':''}<button data-act="home">חזרה לגן</button>${sayBtn(r.msg)}</div></section>`}
-  return `<section class="card"><div class="row">${illo(g.id,1)}<div style="flex:1 1 160px"><p class="mut small">${CATS[g.cat]}</p><h2>${esc(g.name)}</h2><p class="small mut">מאמן ${TRAINS[g.id]}</p></div></div><p>${esc(g.how)}</p>
+  return `<section class="card"><div class="row">${illo(g.id,1)}<div style="flex:1 1 160px"><p class="mut small">${CATS[g.cat]}</p><h2>${esc(g.name)}</h2><p class="small mut">מאמן ${TRAINS[g.id]}</p></div></div>${helpFor(g)?helperHTML():''}<p>${esc(g.how)}</p>
    <div><p class="small mut">רמת קושי</p><div class="chips">${range(5).map(i=>`<button data-act="lvl" data-l="${i}" aria-pressed="${i===G.lvl}">${i+1}</button>`).join('')}</div></div>
-   <div class="row"><button class="pri" data-act="start">להתחיל</button><button data-act="trial">סבב ניסיון</button>${sayBtn(g.name+'. '+g.how)}<button data-act="home">חזרה לגן</button></div><p class="small mut">סבב ניסיון אינו נשמר ואינו משפיע על העץ. אם יוצאים ממשחק אמיתי לפני הסוף, על העץ נשאר תפוח נגוס.</p></section>`;
+   <div class="row">${helpFor(g)?'':'<button class="pri" data-act="start">להתחיל</button>'}<button data-act="trial">סבב ניסיון</button>${helpFor(g)?'':sayBtn(g.name+'. '+g.how)}<button data-act="home">חזרה לגן</button></div><p class="small mut">סבב ניסיון אינו נשמר ואינו משפיע על העץ. אם יוצאים ממשחק אמיתי לפני הסוף, על העץ נשאר תפוח נגוס.</p></section>`;
 }
 
 /* ---------- sound ---------- */
@@ -1485,6 +1550,7 @@ const ROUTES={garden:['הגן שלי',vGarden],games:['תרגילים',vGames],p
 function render(){
   $('#nav').innerHTML=Object.entries(ROUTES).filter(([k])=>k!=='admin'||isOwner||sbOK).map(([k,v])=>`<a href="#${k}" ${route===k?'aria-current="page"':''}>${v[0]}</a>`).join('');
   $('#main').innerHTML=route==='play'&&G?vPlay():route==='breath'?vBreath():(ROUTES[route]||ROUTES.garden)[1]();
+  hMount();
   if(route!=='garden'&&route!=='play')notice='';   /* a save that failed on the result screen must still be reported */
 }
 function go(){wordMsg='';bubble='';cheerMsg='';adding=false;clearInterval(breathT);if(speaking)say('');abandon();const h=location.hash.slice(1);route=ROUTES[h]?h:'garden';appleSel=null;confirmDel=null;render();sbRoute()}
@@ -1514,6 +1580,9 @@ const ACT={
   open(e){openGame(e.dataset.g)},
   lvl(e){G.lvl=+e.dataset.l;render()},
   start(){G.trial=false;startGame()},
+  hexplain(){hSay(G.g.name+'. '+G.g.how,true)},
+  hrepeat(){const r=G.g.name+'. '+G.g.how,t=HELP.last||r;hSay(t,t===r&&!G.active)},
+  hhint(){hSay(G.g.desc)},
   again(){G.res=null;startGame()},
   nextlvl(){G.res=null;G.lvl=Math.min(4,G.lvl+1);startGame()},
   explain(){const x=$('#expl');if(x)x.hidden=false},

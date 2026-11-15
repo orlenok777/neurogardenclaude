@@ -952,5 +952,12 @@
 "Никто не подходит под эти условия.": "Nobody matches these conditions.",
 "Посажено": "Planted",
 "Высокая контрастность": "High contrast",
-"Чёрный текст на белом и заметные рамки.": "Black text on white and clearly visible borders."
+"Чёрный текст на белом и заметные рамки.": "Black text on white and clearly visible borders.",
+"Песочница: пробная версия с помощницей. Данные остаются только на этом устройстве, общая база не подключена.": "Sandbox: a trial version with the helper. Data stays on this device only, the shared database is not connected.",
+"Помощница сада": "Garden helper",
+"Здравствуйте! Я расскажу правила этой игры. Нажмите «Объясни правила».": "Hello! I will explain the rules of this game. Press “Explain the rules”.",
+"Объясни правила": "Explain the rules",
+"Повтори": "Repeat",
+"Подсказка": "Hint",
+"НейроСад: песочница": "NeuroGarden: sandbox"
 }
