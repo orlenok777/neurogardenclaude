@@ -12,7 +12,8 @@ export async function mount(canvas, url) {
   const scene = new Scene(), camera = new PerspectiveCamera(20, 1, 0.05, 10);
   scene.add(new HemisphereLight(0xfff6e8, 0x7a8f6a, 2.1));
   const key = new DirectionalLight(0xfff1dd, 2.2); key.position.set(0.6, 0.9, 1.6); scene.add(key);
-  const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url);
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  const gltf = url instanceof ArrayBuffer ? await loader.parseAsync(url, '') : await loader.loadAsync(url);   // a URL, or the file's bytes
   const model = gltf.scene; scene.add(model);
   const morphs = [], bones = {};
   model.traverse(n => {
